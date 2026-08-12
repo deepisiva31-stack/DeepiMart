@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepiMart - Login</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="auth-page">
+    <section class="auth-card">
+      <header class="auth-header">
+        <div class="logo" aria-hidden="true">DM</div>
+        <h1>DeepiMart</h1>
+        <p class="tagline">Farm to market, made simple.</p>
+      </header>
+
+      <div class="tab-bar" role="tablist" aria-label="Authentication">
+        <button
+          type="button"
+          class="tab tab-login active"
+          role="tab"
+          aria-selected="true"
+          data-tab="login"
+        >
+          Login
+        </button>
+        <button
+          type="button"
+          class="tab tab-register"
+          role="tab"
+          aria-selected="false"
+          data-tab="register"
+        >
+          Sign Up
+        </button>
+      </div>
+
+      <form id="login-form" class="auth-form active" novalidate>
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input
+            type="email"
+            id="login-email"
+            name="email"
+            autocomplete="email"
+            placeholder="user@example.com"
+            required
+          />
+          <p class="field-error" id="login-email-error"></p>
+        </div>
+
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input
+            type="password"
+            id="login-password"
+            name="password"
+            autocomplete="current-password"
+            placeholder="Enter your password"
+            required
+          />
+          <p class="field-error" id="login-password-error"></p>
+        </div>
+
+        <p class="form-message" id="login-message" role="status"></p>
+
+        <button type="submit" class="btn-primary" id="login-submit">Login</button>
+      </form>
+
+      <form id="register-form" class="auth-form" novalidate>
+        <div class="field">
+          <label for="reg-name">Name</label>
+          <input
+            type="text"
+            id="reg-name"
+            name="name"
+            autocomplete="name"
+            placeholder="Your full name"
+            required
+          />
+          <p class="field-error" id="reg-name-error"></p>
+        </div>
+
+        <div class="field">
+          <label for="reg-email">Email</label>
+          <input
+            type="email"
+            id="reg-email"
+            name="email"
+            autocomplete="email"
+            placeholder="user@example.com"
+            required
+          />
+          <p class="field-error" id="reg-email-error"></p>
+        </div>
+
+        <div class="field">
+          <label for="reg-password">Password</label>
+          <input
+            type="password"
+            id="reg-password"
+            name="password"
+            autocomplete="new-password"
+            placeholder="At least 6 characters"
+            minlength="6"
+            required
+          />
+          <p class="field-error" id="reg-password-error"></p>
+        </div>
+
+        <div class="field">
+          <label for="reg-confirm-password">Confirm Password</label>
+          <input
+            type="password"
+            id="reg-confirm-password"
+            name="confirmPassword"
+            autocomplete="new-password"
+            placeholder="Re-enter your password"
+            required
+          />
+          <p class="field-error" id="reg-confirm-error"></p>
+        </div>
+
+        <fieldset class="field role-field">
+          <legend>I am a&hellip;</legend>
+          <label class="role-option">
+            <input type="radio" name="role" value="farmer" />
+            <span class="role-card">
+              <strong>Farmer</strong>
+              <small>Sell your produce</small>
+            </span>
+          </label>
+          <label class="role-option">
+            <input type="radio" name="role" value="buyer" />
+            <span class="role-card">
+              <strong>Buyer</strong>
+              <small>Buy fresh produce</small>
+            </span>
+          </label>
+          <p class="field-error" id="reg-role-error"></p>
+        </fieldset>
+
+        <p class="form-message" id="register-message" role="status"></p>
+
+        <button type="submit" class="btn-primary" id="register-submit">Create Account</button>
+      </form>
+    </section>
+
+    <p class="auth-note">
+      Login opens first. Sign up to create a Farmer or Buyer account.
+    </p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

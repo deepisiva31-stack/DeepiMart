@@ -1,0 +1,23 @@
+{
+  "name": "deepimart",
+  "version": "1.0.0",
+  "description": "DeepiMart - authentication system with email validation and secure user storage",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --env-file-if-exists=.env --watch server/index.js",
+    "test": "node --env-file-if-exists=.env server/test.js"
+  },
+  "keywords": [
+    "deepimart",
+    "auth",
+    "login",
+    "register"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

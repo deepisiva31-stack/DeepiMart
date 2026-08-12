@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Database files (contains user data - keep private)
+data/
+*.db
+*.db-journal
+
+# Local environment variables
+.env
+
+# Logs / OS
+npm-debug.log*
+.DS_Store
+Thumbs.db
