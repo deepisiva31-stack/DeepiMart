@@ -26,6 +26,7 @@
       { href: '#/buyer/wishlist', label: 'My Wishlist', route: '/wishlist' },
       { href: '#/buyer/cart', label: 'Cart', route: '/cart', cart: true },
       { href: '#/buyer/orders', label: 'My Orders', route: '/orders' },
+      { href: '#/buyer/reviews', label: 'My Reviews', route: '/reviews' },
     ],
     admin: [
       { href: '#/admin/overview', label: 'Dashboard', route: '/overview' },

@@ -236,6 +236,67 @@ async function main() {
   const wlCheckAfter = await get('/api/wishlist/check/' + productId, buyerTok);
   check('wishlist check returns false after remove', wlCheckAfter.status === 200 && wlCheckAfter.json.wishlisted === false);
 
+  // --- Reviews ---
+  const rvNoAuth = await post('/api/reviews', { productId, orderId, rating: 5, body: 'Great product!' });
+  check('review requires auth', rvNoAuth.status === 401);
+
+  const rvBadRating = await post('/api/reviews', { productId, orderId, rating: 0, body: 'Good stuff.' }, buyerTok);
+  check('review rejects invalid rating (0)', rvBadRating.status === 400);
+
+  const rvBadRating6 = await post('/api/reviews', { productId, orderId, rating: 6, body: 'Good stuff.' }, buyerTok);
+  check('review rejects invalid rating (6)', rvBadRating6.status === 400);
+
+  const rvEmpty = await post('/api/reviews', { productId, orderId, rating: 5, body: '' }, buyerTok);
+  check('review rejects empty body', rvEmpty.status === 400);
+
+  const rvShort = await post('/api/reviews', { productId, orderId, rating: 5, body: 'Hi' }, buyerTok);
+  check('review rejects short body', rvShort.status === 400);
+
+  const rvBadProduct = await post('/api/reviews', { productId: 9999, orderId, rating: 5, body: 'Great product!' }, buyerTok);
+  check('review rejects invalid product', rvBadProduct.status === 404);
+
+  const rvBadOrder = await post('/api/reviews', { productId, orderId: 9999, rating: 5, body: 'Great product!' }, buyerTok);
+  check('review rejects invalid order', rvBadOrder.status === 404);
+
+  const rvNotPurchased = await post('/api/reviews', { productId, orderId, rating: 5, body: 'Never bought this.' }, farmerTok);
+  check('farmer cannot review (not buyer)', rvNotPurchased.status === 403);
+
+  const rvSuccess = await post('/api/reviews', { productId, orderId, rating: 5, body: 'Excellent tomatoes, very fresh and tasty!' }, buyerTok);
+  check('buyer creates review', rvSuccess.status === 201);
+  check('review returns updated average', rvSuccess.json.averageRating === 5);
+  check('review returns total count', rvSuccess.json.totalCount === 1);
+
+  const rvDup = await post('/api/reviews', { productId, orderId, rating: 4, body: 'Another review for the same product.' }, buyerTok);
+  check('duplicate review returns 409', rvDup.status === 409);
+
+  const rvList = await get('/api/products/' + productId + '/reviews');
+  check('product reviews endpoint returns reviews', rvList.status === 200 && rvList.json.reviews.length === 1);
+  check('product reviews has average rating', rvList.json.averageRating === 5);
+  check('product reviews has distribution', Array.isArray(rvList.json.distribution) && rvList.json.distribution.length === 5);
+
+  const rvMine = await get('/api/reviews/mine', buyerTok);
+  check('buyer can list own reviews', rvMine.status === 200 && rvMine.json.reviews.length === 1);
+  check('my review has product name', rvMine.json.reviews[0].productName === 'Test Tomatoes');
+
+  const rvMineFarmer = await get('/api/reviews/mine', farmerTok);
+  check('farmer forbidden from buyer reviews', rvMineFarmer.status === 403);
+
+  const rvInvalidProduct = await get('/api/products/9999/reviews');
+  check('reviews for non-existent product returns 404', rvInvalidProduct.status === 404);
+
+  const rvDeleteId = rvMine.json.reviews[0].id;
+  const rvDelete = await del('/api/reviews/' + rvDeleteId, farmerTok);
+  check('farmer cannot delete buyer review', rvDelete.status === 403);
+
+  const rvDeleteBuyer = await del('/api/reviews/' + rvDeleteId, buyerTok);
+  check('buyer can delete own review', rvDeleteBuyer.status === 200);
+
+  const rvDeleteGone = await del('/api/reviews/' + rvDeleteId, buyerTok);
+  check('delete non-existent review returns 404', rvDeleteGone.status === 404);
+
+  const rvListAfter = await get('/api/products/' + productId + '/reviews');
+  check('product reviews empty after delete', rvListAfter.json.reviews.length === 0 && rvListAfter.json.totalCount === 0);
+
   // --- Admin ---
   const adminUsers = await get('/api/admin/users', adminTok);
   check('admin lists users', adminUsers.status === 200 && adminUsers.json.users.length === 3);

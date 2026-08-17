@@ -329,6 +329,7 @@
                 altTbody,
               ]),
         ]),
+        buildReviewsSection(p.id, reviewData),
       ]);
       view.innerHTML = '';
       view.appendChild(container);
@@ -336,6 +337,140 @@
       DM.toast(e.message, 'error');
       view.appendChild(DM.emptyState('Could not load product', e.message));
     }
+  }
+
+  function buildReviewsSection(productId, reviewData) {
+    var dist = reviewData.distribution || [0, 0, 0, 0, 0];
+    var total = reviewData.totalCount || 0;
+
+    var distRows = [];
+    for (var i = 5; i >= 1; i--) {
+      var count = dist[i - 1];
+      var pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      distRows.push(DM.el('div', { class: 'dist-row' }, [
+        DM.el('span', { class: 'dist-label', text: i + ' star' }),
+        DM.el('div', { class: 'dist-bar-track' }, [DM.el('div', { class: 'dist-bar-fill', style: 'width:' + pct + '%' })]),
+        DM.el('span', { class: 'dist-count', text: String(count) }),
+      ]));
+    }
+
+    var summaryBlock = total > 0
+      ? DM.el('div', { class: 'review-summary' }, [
+          DM.el('div', { class: 'review-summary-score', text: reviewData.averageRating }),
+          DM.el('div', { class: 'review-summary-details' }, [
+            DM.el('div', { html: starsHtml(reviewData.averageRating) }),
+            DM.el('p', { class: 'pc-meta', text: total + ' review' + (total !== 1 ? 's' : '') }),
+            DM.el('div', { class: 'dist-chart' }, distRows),
+          ]),
+        ])
+      : DM.emptyState('No reviews yet', 'Be the first to review this product.');
+
+    var reviewCards = (reviewData.reviews || []).map(function (r) {
+      return DM.el('div', { class: 'review-card' }, [
+        DM.el('div', { class: 'review-card-head' }, [
+          DM.el('div', { class: 'review-card-meta' }, [
+            DM.el('strong', { text: r.reviewerName }),
+            DM.el('span', { class: 'pc-meta', text: DM.formatDate(r.createdAt) }),
+          ]),
+          DM.el('div', { html: starsHtml(r.rating) }),
+        ]),
+        DM.el('p', { class: 'review-card-body', text: r.body }),
+      ]);
+    });
+
+    var reviewsList = reviewCards.length > 0
+      ? DM.el('div', { class: 'reviews-list' }, reviewCards)
+      : DM.emptyState('No reviews yet', 'Be the first to share your experience.');
+
+    var reviewFormSection = buildReviewForm(productId, reviewData);
+
+    return DM.el('div', { class: 'section' }, [
+      DM.el('div', { class: 'section-head' }, [DM.el('h3', { text: 'Ratings & Reviews' })]),
+      summaryBlock,
+      reviewsList,
+      reviewFormSection,
+    ]);
+  }
+
+  function buildReviewForm(productId, reviewData) {
+    var form = DM.el('div', { class: 'review-form-section', id: 'review-form-section' });
+    DM.api('GET', '/api/orders/buyer').then(function (data) {
+      var completedOrders = (data.orders || []).filter(function (o) {
+        return o.status === 'completed' && o.items.some(function (i) { return i.product_id === productId; });
+      });
+      if (completedOrders.length === 0) {
+        return;
+      }
+      var alreadyReviewed = (reviewData.reviews || []).some(function (r) {
+        return r.reviewerName && r.id;
+      });
+      DM.api('GET', '/api/reviews/mine').then(function (mineData) {
+        var hasReviewed = (mineData.reviews || []).some(function (r) { return r.productId === productId; });
+        if (hasReviewed) {
+          return;
+        }
+        var rating = 0;
+        var ratingError = DM.el('div', { class: 'field-error hidden', id: 'rv-rating-error' });
+        var bodyError = DM.el('div', { class: 'field-error hidden', id: 'rv-body-error' });
+        var bodyInput = DM.el('textarea', { id: 'rv-body', rows: '4', maxlength: '2000', placeholder: 'Share your experience with this product...' });
+        var starContainer = DM.el('div', { class: 'star-input-container', id: 'rv-stars' });
+        starContainer.innerHTML = starsInputHtml('rv-rating', 0);
+        starContainer.querySelectorAll('input[name="rv-rating"]').forEach(function (input) {
+          input.addEventListener('change', function () {
+            rating = Number(input.value);
+            var stars = starContainer.querySelectorAll('.star');
+            stars.forEach(function (s, idx) {
+              s.classList.toggle('filled', idx < rating);
+            });
+            ratingError.classList.add('hidden');
+          });
+        });
+        var submitBtn = DM.el('button', { class: 'btn-primary', text: 'Submit review' });
+        var orderSelect = DM.el('select', { id: 'rv-order' });
+        completedOrders.forEach(function (o) {
+          orderSelect.appendChild(DM.el('option', { value: o.id, text: o.orderCode + ' (' + DM.formatDate(o.createdAt) + ')' }));
+        });
+        submitBtn.addEventListener('click', async function () {
+          ratingError.classList.add('hidden');
+          bodyError.classList.add('hidden');
+          var valid = true;
+          if (!rating || rating < 1 || rating > 5) {
+            ratingError.textContent = 'Please select a rating from 1 to 5.';
+            ratingError.classList.remove('hidden');
+            valid = false;
+          }
+          var bodyVal = bodyInput.value.trim();
+          if (!bodyVal || bodyVal.length < 5) {
+            bodyError.textContent = 'Review must be at least 5 characters.';
+            bodyError.classList.remove('hidden');
+            valid = false;
+          }
+          if (!valid) return;
+          submitBtn.disabled = true;
+          try {
+            await DM.api('POST', '/api/reviews', {
+              productId: productId,
+              orderId: Number(orderSelect.value),
+              rating: rating,
+              body: bodyVal,
+            });
+            DM.toast('Review submitted!', 'success');
+            renderProductDetail(productId);
+          } catch (e) {
+            DM.toast(e.message, 'error');
+            submitBtn.disabled = false;
+          }
+        });
+        form.appendChild(DM.el('h4', { text: 'Write a Review' }));
+        form.appendChild(DM.el('div', { class: 'review-form' }, [
+          DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Your rating' }), starContainer, ratingError]),
+          DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Review' }), bodyInput, bodyError]),
+          DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Order' }), orderSelect]),
+          DM.el('div', { class: 'btn-row' }, [submitBtn]),
+        ]));
+      }).catch(function () {});
+    }).catch(function () {});
+    return form;
   }
 
   // ---------------- Cart ----------------
@@ -761,6 +896,53 @@
     }
   }
 
+  // ---------------- My Reviews ----------------
+  async function renderMyReviews() {
+    DM.setView(DM.skeleton());
+    var view = document.getElementById('view');
+    try {
+      var data = await DM.api('GET', '/api/reviews/mine');
+      var container = DM.el('div', { class: 'page' }, [
+        pageTitle('My Reviews', 'Reviews you have submitted for purchased products.'),
+      ]);
+      if (data.reviews.length === 0) {
+        container.appendChild(DM.emptyState('No reviews yet', 'Complete a purchase and share your experience.'));
+        container.appendChild(DM.el('div', { class: 'btn-row' }, [DM.el('a', { class: 'btn-primary', href: '#/buyer/market', text: 'Go to marketplace' })]));
+      } else {
+        var list = DM.el('div', { class: 'reviews-list' });
+        data.reviews.forEach(function (r) {
+          var removeBtn = DM.el('button', { class: 'btn-ghost btn-sm', text: 'Delete' });
+          removeBtn.addEventListener('click', async function () {
+            if (!confirm('Delete this review?')) return;
+            try {
+              await DM.api('DELETE', '/api/reviews/' + r.id);
+              DM.toast('Review deleted.', 'success');
+              renderMyReviews();
+            } catch (e) {
+              DM.toast(e.message, 'error');
+            }
+          });
+          list.appendChild(DM.el('div', { class: 'review-card' }, [
+            DM.el('div', { class: 'review-card-head' }, [
+              DM.el('div', { class: 'review-card-meta' }, [
+                DM.el('a', { class: 'review-product-link', href: '#/buyer/product/' + r.productId, text: r.productName }),
+                DM.el('span', { class: 'pc-meta', text: DM.formatDate(r.createdAt) }),
+              ]),
+              DM.el('div', null, [DM.el('div', { html: starsHtml(r.rating) }), removeBtn]),
+            ]),
+            DM.el('p', { class: 'review-card-body', text: r.body }),
+          ]));
+        });
+        container.appendChild(DM.el('div', { class: 'section' }, [list]));
+      }
+      view.innerHTML = '';
+      view.appendChild(container);
+    } catch (e) {
+      DM.toast(e.message, 'error');
+      view.appendChild(DM.emptyState('Could not load reviews', e.message));
+    }
+  }
+
   // ---------------- Farmers / location search ----------------
   async function renderFarmers() {
     DM.setView(DM.skeleton());
@@ -825,6 +1007,7 @@
     '/cart': renderCart,
     '/wishlist': renderWishlist,
     '/orders': renderOrders,
+    '/reviews': renderMyReviews,
     '/delivery/:id': function (params) {
       return renderDelivery(params.id);
     },

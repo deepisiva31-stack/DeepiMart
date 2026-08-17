@@ -221,6 +221,42 @@ async function main() {
   await page.waitForFunction(() => document.querySelectorAll('.product-card').length === 0, { timeout: 5000 });
   check('wishlist remove empties list', await page.evaluate(() => document.body.textContent.indexOf('Your wishlist is empty') !== -1));
 
+  step('buyer reviews');
+  const buyerToken = await page.evaluate(() => localStorage.getItem('dm_token'));
+  const buyerOrders = await (await fetch(base + '/api/orders/buyer', { headers: { Authorization: 'Bearer ' + buyerToken } })).json();
+  const reviewOrder = buyerOrders.orders[0];
+  if (reviewOrder && reviewOrder.delivery) {
+    for (let i = 0; i < 3; i++) {
+      await fetch(base + '/api/deliveries/' + reviewOrder.id + '/advance', { method: 'POST', headers: { Authorization: 'Bearer ' + buyerToken, 'Content-Type': 'application/json' } });
+    }
+  }
+
+  step('buyer product detail reviews');
+  await goto('#/buyer/market');
+  await page.waitForSelector('.product-card');
+  await click('.product-card a[href^="#/buyer/product/"]');
+  await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/product/') === 0, { timeout: 8000 });
+  await page.waitForSelector('.review-form-section', { timeout: 5000 });
+  check('product detail shows reviews section', true);
+
+  step('buyer write review');
+  await page.evaluate(() => {
+    const labels = document.querySelectorAll('.star-input .star-label');
+    if (labels.length >= 4) labels[3].click();
+  });
+  await page.evaluate(() => {
+    const ta = document.getElementById('rv-body');
+    if (ta) { ta.value = 'Great product, very fresh and delicious!'; ta.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  await click('#review-form-section .btn-primary');
+  await page.waitForFunction(() => document.querySelector('.review-card') !== null, { timeout: 8000 });
+  check('review submitted and displayed', await page.evaluate(() => document.querySelector('.review-card') !== null));
+
+  step('buyer my reviews page');
+  await goto('#/buyer/reviews');
+  await page.waitForSelector('.review-card', { timeout: 5000 });
+  check('my reviews page shows reviews', true);
+
   await logout();
 
   // ===== Admin flow =====
