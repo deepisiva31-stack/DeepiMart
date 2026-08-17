@@ -1,23 +1,29 @@
 {
   "name": "deepimart",
   "version": "1.0.0",
-  "description": "DeepiMart - authentication system with email validation and secure user storage",
+  "description": "DeepiMart - farm-to-market marketplace: listings, orders, payments, delivery tracking, messaging, and admin reports",
   "main": "server/index.js",
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "node --env-file-if-exists=.env --watch server/index.js",
-    "test": "node --env-file-if-exists=.env server/test.js"
+    "test": "node --env-file-if-exists=.env server/test.js",
+    "test:ui": "node --env-file-if-exists=.env scripts/ui-smoke.js"
   },
   "keywords": [
-    "deepimart",
-    "auth",
-    "login",
-    "register"
+    "marketplace",
+    "farm-to-market",
+    "uganda",
+    "orders",
+    "delivery",
+    "express"
   ],
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.6.0"
   }
 }

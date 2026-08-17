@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
+const { toPublicUser, createSession, destroySession, requireAuth } = require('./session');
 
 const router = express.Router();
 
@@ -14,18 +15,7 @@ function sanitizeString(value, maxLength) {
 
 function validateEmail(email) {
   if (!email || email.length > 254) return false;
-  if (!EMAIL_REGEX.test(email)) return false;
-  return email.length <= 254;
-}
-
-function toPublicUser(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    role: row.role,
-    createdAt: row.created_at,
-  };
+  return EMAIL_REGEX.test(email);
 }
 
 router.post('/register', (req, res) => {
@@ -34,6 +24,8 @@ router.post('/register', (req, res) => {
     const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
     const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
     const role = sanitizeString(req.body && req.body.role, 20).toLowerCase();
+    const phone = sanitizeString(req.body && req.body.phone, 30);
+    const location = sanitizeString(req.body && req.body.location, 120);
 
     if (!name) {
       return res.status(400).json({ error: 'Please enter your name.' });
@@ -55,11 +47,10 @@ router.post('/register', (req, res) => {
 
     const passwordHash = bcrypt.hashSync(password, 12);
     const result = db
-      .prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
-      .run(name, email, passwordHash, role);
+      .prepare('INSERT INTO users (name, email, password_hash, role, phone, location) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(name, email, passwordHash, role, phone, location);
 
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
-
     return res.status(201).json({ message: 'Account created successfully.', user: toPublicUser(row) });
   } catch (err) {
     if (String(err && err.message).includes('UNIQUE')) {
@@ -88,12 +79,25 @@ router.post('/login', (req, res) => {
     if (!passwordOk) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
+    if (row.status !== 'active') {
+      return res.status(403).json({ error: 'Your account has been disabled.' });
+    }
 
-    return res.status(200).json({ message: 'Login successful.', user: toPublicUser(row) });
+    const token = createSession(row.id);
+    return res.status(200).json({ message: 'Login successful.', token, user: toPublicUser(row) });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ error: 'Internal server error.' });
   }
+});
+
+router.get('/me', requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
+router.post('/logout', requireAuth, (req, res) => {
+  destroySession(req.token);
+  res.json({ message: 'Logged out.' });
 });
 
 module.exports = router;
