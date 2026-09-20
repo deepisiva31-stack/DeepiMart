@@ -77,6 +77,19 @@ async function del(url, token) {
   return { status: res.status, json };
 }
 
+async function uploadImg(url, file, token) {
+  const form = new FormData();
+  if (file) form.append('image', new Blob([file.bytes], { type: file.type }), file.name);
+  const headers = {};
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch(BASE + url, { method: 'POST', headers, body: form });
+  let json = {};
+  try {
+    json = await res.json();
+  } catch (e) {}
+  return { status: res.status, json };
+}
+
 function check(name, cond) {
   if (cond) {
     console.log('PASS', name);
@@ -166,6 +179,98 @@ async function main() {
   check('admin approves product', approve.status === 200);
   const listApproved2 = await get('/api/products');
   check('approved product listed publicly', listApproved2.json.products.some((p) => p.id === productId));
+
+  // --- Product image upload ---
+  const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
+  const uploadedFiles = [];
+  const pngFile = { bytes: pngBytes, type: 'image/png', name: 'crop.png' };
+
+  const upNoAuth = await uploadImg('/api/farmer/product-images', pngFile);
+  check('image upload requires auth', upNoAuth.status === 401);
+
+  const upBuyer = await uploadImg('/api/farmer/product-images', pngFile, buyerTok);
+  check('buyer cannot upload product images', upBuyer.status === 403);
+
+  const upOk = await uploadImg('/api/farmer/product-images', pngFile, farmerTok);
+  check('farmer uploads product image', upOk.status === 201 && upOk.json.url && /^\/uploads\/[a-z0-9]+_[0-9a-f]{20}\.png$/.test(upOk.json.url));
+  const imgUrl = upOk.json.url;
+  if (upOk.json.url) {
+    const stored = path.join(UPLOADS_DIR, path.basename(upOk.json.url));
+    uploadedFiles.push(path.basename(upOk.json.url));
+    check('uploaded image stored on disk', fs.existsSync(stored));
+  }
+  if (imgUrl) {
+    const served = await fetch(BASE + imgUrl);
+    check('uploaded image served publicly', served.status === 200 && (served.headers.get('content-type') || '').indexOf('image/png') === 0);
+  }
+
+  const upExec = await uploadImg('/api/farmer/product-images', { bytes: pngBytes, type: 'image/png', name: 'crop.exe' }, farmerTok);
+  check('executable file rejected', upExec.status === 400);
+
+  const upTxt = await uploadImg('/api/farmer/product-images', { bytes: pngBytes, type: 'image/png', name: 'crop.txt' }, farmerTok);
+  check('unsupported file extension rejected', upTxt.status === 400);
+
+  const upMismatch = await uploadImg('/api/farmer/product-images', { bytes: pngBytes, type: 'text/plain', name: 'crop.png' }, farmerTok);
+  check('mismatched mime type rejected', upMismatch.status === 400);
+
+  const upBig = await uploadImg('/api/farmer/product-images', { bytes: Buffer.alloc(2 * 1024 * 1024 + 1, 65), type: 'image/png', name: 'big.png' }, farmerTok);
+  check('oversized image rejected', upBig.status === 400);
+
+  const upEmpty = await uploadImg('/api/farmer/product-images', null, farmerTok);
+  check('upload without file rejected', upEmpty.status === 400);
+
+  const withImg = await post('/api/farmer/products', { name: 'Image Tomato', description: 'Fresh', categoryId: catId, price: 2200, unit: 'kg', quantity: 10, photo: imgUrl }, farmerTok);
+  check('create product with uploaded image', withImg.status === 201 && withImg.json.product.photo === imgUrl);
+  const imgProdId = withImg.json.product.id;
+
+  const badPhoto = await post('/api/farmer/products', { name: 'Path Photo', description: 'x', categoryId: catId, price: 2200, unit: 'kg', quantity: 10, photo: '../secret.png' }, farmerTok);
+  check('create product rejects path traversal photo', badPhoto.status === 400);
+
+  const jsPhoto = await post('/api/farmer/products', { name: 'Js Photo', description: 'x', categoryId: catId, price: 2200, unit: 'kg', quantity: 10, photo: 'javascript:alert(1)' }, farmerTok);
+  check('create product rejects unsafe photo string', jsPhoto.status === 400);
+
+  const up2 = await uploadImg('/api/farmer/product-images', { bytes: pngBytes, type: 'image/webp', name: 'crop.webp' }, farmerTok);
+  check('farmer uploads webp image', up2.status === 201 && /\.webp$/.test(up2.json.url || ''));
+  const img2Url = up2.json.url;
+  if (img2Url) uploadedFiles.push(path.basename(img2Url));
+
+  const baseFields = { name: 'Image Tomato', description: 'Fresh', categoryId: catId, price: 2200, unit: 'kg', quantity: 10, harvestDate: '', freshness: 'Fresh', location: 'Kampala' };
+
+  const replace = await put('/api/farmer/products/' + imgProdId, { ...baseFields, photo: img2Url }, farmerTok);
+  check('edit replaces product image', replace.status === 200 && replace.json.product.photo === img2Url);
+  if (imgUrl) check('old image file removed after replace', !fs.existsSync(path.join(UPLOADS_DIR, path.basename(imgUrl))));
+
+  const keep = await put('/api/farmer/products/' + imgProdId, { ...baseFields, photo: img2Url }, farmerTok);
+  check('edit keeps existing image when none selected', keep.status === 200 && keep.json.product.photo === img2Url);
+
+  const badUpd = await put('/api/farmer/products/' + imgProdId, { ...baseFields, photo: '/etc/passwd' }, farmerTok);
+  check('edit rejects path traversal photo', badUpd.status === 400);
+
+  const up3 = await uploadImg('/api/farmer/product-images', pngFile, farmerTok);
+  const img3Url = up3.json.url;
+  if (img3Url) uploadedFiles.push(path.basename(img3Url));
+  const deleteImg = await post('/api/farmer/products', { name: 'Delete Img', description: 'x', categoryId: catId, price: 1500, unit: 'kg', quantity: 5, photo: img3Url }, farmerTok);
+  check('create product with image for delete test', deleteImg.status === 201);
+  const deleteProdId = deleteImg.json.product.id;
+  const delImg = await del('/api/farmer/products/' + deleteProdId, farmerTok);
+  check('farmer deletes product with image', delImg.status === 200);
+  check('image file removed when product deleted', img3Url ? !fs.existsSync(path.join(UPLOADS_DIR, path.basename(img3Url))) : true);
+
+  const approveImg = await patch('/api/admin/products/' + imgProdId, { status: 'approved' }, adminTok);
+  check('admin approves product with image', approveImg.status === 200);
+  const listImg = await get('/api/products');
+  const listedImg = listImg.json.products.find((p) => p.id === imgProdId);
+  check('public listing includes product image', !!listedImg && listedImg.photo === img2Url);
+
+  const buyerCannotPut = await put('/api/farmer/products/' + imgProdId, baseFields, buyerTok);
+  check('buyer cannot modify product image', buyerCannotPut.status === 403);
+
+  for (const f of uploadedFiles) {
+    try {
+      fs.rmSync(path.join(UPLOADS_DIR, f), { force: true });
+    } catch {}
+  }
 
   // --- Cart ---
   const addCart = await post('/api/cart', { productId, quantity: 2 }, buyerTok);

@@ -6,6 +6,9 @@ data/
 *.db
 *.db-journal
 
+# Uploaded product images
+uploads/
+
 # Local environment variables
 .env
 

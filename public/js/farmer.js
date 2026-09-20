@@ -303,12 +303,12 @@
     };
     var photoPreview = p.photo ? p.photo : DM.placeholderImage((categories[0] || {}).name || 'produce');
     var form = DM.el('form', { id: 'product-form', class: 'form' });
-    var photoInput = DM.el('input', { type: 'file', accept: 'image/*', id: 'product-photo' });
+    var photoInput = DM.el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', id: 'product-photo' });
     var img = DM.el('img', { class: 'photo-preview', src: photoPreview, alt: 'Product photo', id: 'product-photo-preview' });
     var photoField = DM.el('div', { class: 'field' }, [
       DM.el('label', { text: 'Product photo' }),
       DM.el('div', { class: 'photo-upload' }, [img, DM.el('label', { class: 'btn-ghost btn-sm', html: 'Choose photo' }), photoInput]),
-      DM.el('p', { class: 'field-hint', text: 'JPG or PNG under 1.5 MB works best.' }),
+      DM.el('p', { class: 'field-hint', text: 'JPG, PNG or WEBP, max 2 MB. Leave empty to keep the current image.' }),
     ]);
 
     var catOptions = categories.map(function (c) {
@@ -321,19 +321,27 @@
     var unitSelect = DM.el('select', { id: 'product-unit', required: 'required' }, unitOptions);
 
     var photoData = p.photo;
+    var selectedFile = null;
+    var previewUrl = null;
     photoInput.addEventListener('change', function () {
       var file = photoInput.files && photoInput.files[0];
       if (!file) return;
-      if (file.size > 1.5 * 1024 * 1024) {
-        DM.toast('Image is too large (max 1.5 MB).', 'error');
+      var mimeOk = /^image\/(jpeg|png|webp)$/i.test(file.type);
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (!mimeOk || ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) === -1) {
+        DM.toast('Invalid image type. Please use JPG, PNG or WEBP.', 'error');
+        photoInput.value = '';
         return;
       }
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        photoData = e.target.result;
-        img.src = photoData;
-      };
-      reader.readAsDataURL(file);
+      if (file.size > 2 * 1024 * 1024) {
+        DM.toast('Image is too large (max 2 MB).', 'error');
+        photoInput.value = '';
+        return;
+      }
+      selectedFile = file;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(file);
+      img.src = previewUrl;
     });
 
     var grid = DM.el('div', { class: 'form-grid' }, [
@@ -359,21 +367,28 @@
 
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      var payload = {
-        name: document.getElementById('product-name').value.trim(),
-        description: document.getElementById('product-description').value.trim(),
-        categoryId: Number(document.getElementById('product-category').value),
-        price: Number(document.getElementById('product-price').value),
-        unit: document.getElementById('product-unit').value,
-        quantity: Number(document.getElementById('product-quantity').value),
-        harvestDate: document.getElementById('product-harvest').value,
-        freshness: document.getElementById('product-freshness').value.trim(),
-        location: document.getElementById('product-location').value.trim(),
-        photo: photoData,
-      };
       var btn = form.querySelector('button[type="submit"]');
       btn.disabled = true;
       try {
+        var payload = {
+          name: document.getElementById('product-name').value.trim(),
+          description: document.getElementById('product-description').value.trim(),
+          categoryId: Number(document.getElementById('product-category').value),
+          price: Number(document.getElementById('product-price').value),
+          unit: document.getElementById('product-unit').value,
+          quantity: Number(document.getElementById('product-quantity').value),
+          harvestDate: document.getElementById('product-harvest').value,
+          freshness: document.getElementById('product-freshness').value.trim(),
+          location: document.getElementById('product-location').value.trim(),
+        };
+        if (selectedFile) {
+          var up = await DM.upload('/api/farmer/product-images', 'image', selectedFile);
+          payload.photo = up.url;
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
+          previewUrl = null;
+        } else {
+          payload.photo = photoData || '';
+        }
         if (product) {
           await DM.api('PUT', '/api/farmer/products/' + product.id, payload);
           DM.toast('Product updated.', 'success');

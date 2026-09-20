@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('./db');
 const { requireAuth, requireRole } = require('./session');
+const { upload, isStoredPhoto, removePhoto } = require('./uploads');
 
 const router = express.Router();
 
@@ -68,7 +69,8 @@ function mapProduct(row) {
 function validProductInput(body) {
   const name = sanitizeString(body.name, 120);
   const description = sanitizeString(body.description, 2000);
-  const photo = sanitizeString(body.photo, 2000000);
+  const rawPhoto = body.photo === undefined || body.photo === null ? '' : String(body.photo).trim();
+  const photo = rawPhoto === '' || isStoredPhoto(rawPhoto) ? rawPhoto : null;
   const categoryId = num(body.categoryId, NaN);
   const price = num(body.price, NaN);
   const unit = sanitizeString(body.unit, 20);
@@ -78,6 +80,7 @@ function validProductInput(body) {
   const location = sanitizeString(body.location, 120);
 
   if (!name || name.length < 2) return { error: 'Please enter a product name.' };
+  if (photo === null) return { error: 'Invalid product image.' };
   if (!Number.isInteger(categoryId)) return { error: 'Please choose a category.' };
   if (!Number.isFinite(price) || price <= 0) return { error: 'Please enter a valid price.' };
   if (!unit) return { error: 'Please choose a unit.' };
@@ -246,13 +249,16 @@ router.put('/farmer/products/:id', requireAuth, requireRole('farmer'), (req, res
   const check = validProductInput(req.body || {});
   if (check.error) return res.status(400).json({ error: check.error });
   const d = check.data;
+  const photo = d.photo || existing.photo;
 
   db.prepare(
     `UPDATE products
         SET category_id = ?, name = ?, description = ?, photo = ?, price = ?, unit = ?,
             quantity = ?, harvest_date = ?, freshness = ?, location = ?
       WHERE id = ?`
-  ).run(d.categoryId, d.name, d.description, d.photo, d.price, d.unit, d.quantity, d.harvestDate, d.freshness, d.location || existing.location, id);
+  ).run(d.categoryId, d.name, d.description, photo, d.price, d.unit, d.quantity, d.harvestDate, d.freshness, d.location || existing.location, id);
+
+  if (photo !== existing.photo) removePhoto(existing.photo);
 
   const row = db.prepare(`${productSelect()} WHERE p.id = ?`).get(id);
   res.json({ message: 'Product updated.', product: mapProduct(row) });
@@ -274,9 +280,24 @@ router.patch('/farmer/products/:id/stock', requireAuth, requireRole('farmer'), (
 
 router.delete('/farmer/products/:id', requireAuth, requireRole('farmer'), (req, res) => {
   const id = num(req.params.id, NaN);
-  const result = db.prepare('DELETE FROM products WHERE id = ? AND farmer_id = ?').run(id, req.user.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Product not found.' });
+  const existing = db.prepare('SELECT photo FROM products WHERE id = ? AND farmer_id = ?').get(id, req.user.id);
+  if (!existing) return res.status(404).json({ error: 'Product not found.' });
+  db.prepare('DELETE FROM products WHERE id = ? AND farmer_id = ?').run(id, req.user.id);
+  removePhoto(existing.photo);
   res.json({ message: 'Product deleted.' });
+});
+
+router.post('/farmer/product-images', requireAuth, requireRole('farmer'), (req, res) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Image is too large (max 2 MB).' });
+      }
+      return res.status(err.status || 400).json({ error: err.message || 'Image upload failed.' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Please select an image file.' });
+    res.status(201).json({ message: 'Image uploaded.', url: '/uploads/' + req.file.filename });
+  });
 });
 
 module.exports = router;

@@ -47,6 +47,28 @@
     return data;
   }
 
+  async function upload(url, fieldName, file) {
+    var token = getToken();
+    var body = new FormData();
+    body.append(fieldName, file, file.name || 'image');
+    var headers = {};
+    if (token) headers.Authorization = 'Bearer ' + token;
+    var res = await fetch(url, { method: 'POST', headers: headers, body: body });
+    var data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = {};
+    }
+    if (!res.ok) {
+      var err = new Error((data && data.error) || 'Upload failed');
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;')
@@ -254,6 +276,7 @@
     storeSession: storeSession,
     clearSession: clearSession,
     api: api,
+    upload: upload,
     esc: esc,
     money: money,
     formatDate: formatDate,

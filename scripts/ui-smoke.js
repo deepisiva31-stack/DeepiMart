@@ -140,14 +140,42 @@ async function main() {
   await setValue('#product-price', '2500');
   await page.select('#product-unit', 'kg');
   await setValue('#product-quantity', '100');
+  const tmpImg = path.join(require('os').tmpdir(), 'ui-smoke-' + Date.now() + '.png');
+  fs.writeFileSync(tmpImg, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+  const photoInput = await page.waitForSelector('#product-photo', { visible: false });
+  await photoInput.uploadFile(tmpImg);
+  await page.evaluate(() => {
+    const el = document.getElementById('product-photo');
+    if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(() => (document.getElementById('product-photo-preview').src || '').indexOf('blob:') === 0, { timeout: 8000 });
   await click('#product-form button[type="submit"]');
   await page.waitForFunction(() => window.location.hash === '#/farmer/products', { timeout: 8000 });
-  const added = await page.evaluate(async () => {
+  fs.rmSync(tmpImg, { force: true });
+  const addedPhoto = await page.evaluate(async () => {
     const r = await fetch('/api/farmer/products', { headers: { Authorization: 'Bearer ' + localStorage.getItem('dm_token') } });
     const d = await r.json();
-    return d.products.some((p) => p.name === 'UI Test Maize');
+    const p = d.products.find((x) => x.name === 'UI Test Maize');
+    return p ? p.photo : '';
   });
-  check('farmer can add a product', added);
+  check('farmer can add a product', typeof addedPhoto === 'string' && addedPhoto !== '');
+  check('farmer product saved with uploaded image', typeof addedPhoto === 'string' && addedPhoto.indexOf('/uploads/') === 0);
+  let imgProdId = null;
+  if (typeof addedPhoto === 'string' && addedPhoto.indexOf('/uploads/') === 0) {
+    imgProdId = await page.evaluate(async () => {
+      const r = await fetch('/api/farmer/products', { headers: { Authorization: 'Bearer ' + localStorage.getItem('dm_token') } });
+      const d = await r.json();
+      const p = d.products.find((x) => x.name === 'UI Test Maize');
+      return p ? String(p.id) : null;
+    });
+    await page.evaluate(async (prodId) => {
+      const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@deepimart.com', password: 'admin123' }) });
+      const ld = await lr.json();
+      if (ld.token && prodId) {
+        await fetch('/api/admin/products/' + prodId, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ld.token }, body: JSON.stringify({ status: 'approved' }) });
+      }
+    }, imgProdId);
+  }
 
   step('farmer orders');
   await goto('#/farmer/orders');
@@ -192,6 +220,25 @@ async function main() {
   await page.waitForSelector('.product-grid .product-card');
   const cards = await page.$$eval('.product-card', (els) => els.length);
   check('buyer marketplace lists products', cards >= 5);
+  await sleep(500);
+  const marketImg = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('.product-card img')).some((im) => {
+      const src = (im.currentSrc || im.getAttribute('src') || '').toString();
+      return src.indexOf('/uploads/') !== -1;
+    });
+  });
+  check('buyer marketplace shows product image', marketImg);
+  if (imgProdId) {
+    await goto('#/buyer/product/' + imgProdId);
+    await page.waitForSelector('.pd-photo img');
+    const detailImg = await page.evaluate(() => {
+      const im = document.querySelector('.pd-photo img');
+      return ((im.currentSrc || im.getAttribute('src') || '').toString()).indexOf('/uploads/') !== -1;
+    });
+    check('buyer product detail shows product image', detailImg);
+    await goto('#/buyer/market');
+    await page.waitForSelector('#mkt-q');
+  }
 
   step('buyer search');
   await page.evaluate(() => {

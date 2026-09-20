@@ -8,6 +8,7 @@ const marketplaceRouter = require('./marketplace');
 const chatRouter = require('./chat');
 const adminRouter = require('./admin');
 const { seed } = require('./seed');
+const { UPLOADS_DIR } = require('./uploads');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -32,6 +33,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/uploads', express.static(UPLOADS_DIR, { index: false }));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
