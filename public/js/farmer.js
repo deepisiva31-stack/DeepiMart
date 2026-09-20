@@ -307,7 +307,7 @@
     var img = DM.el('img', { class: 'photo-preview', src: photoPreview, alt: 'Product photo', id: 'product-photo-preview' });
     var photoField = DM.el('div', { class: 'field' }, [
       DM.el('label', { text: 'Product photo' }),
-      DM.el('div', { class: 'photo-upload' }, [img, DM.el('label', { class: 'btn-ghost btn-sm', html: 'Choose photo' }), photoInput]),
+      DM.el('div', { class: 'photo-upload' }, [img, DM.el('label', { class: 'btn-ghost btn-sm', for: 'product-photo', html: 'Choose photo' }), photoInput]),
       DM.el('p', { class: 'field-hint', text: 'JPG, PNG or WEBP, max 2 MB. Leave empty to keep the current image.' }),
     ]);
 

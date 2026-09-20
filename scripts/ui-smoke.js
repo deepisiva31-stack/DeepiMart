@@ -22,6 +22,7 @@ server.stdout.on('data', (d) => process.stdout.write('[server] ' + d.toString())
 let failures = 0;
 let lastStep = 'startup';
 let errors = [];
+let smokeUploads = [];
 const t0 = Date.now();
 
 function step(name) {
@@ -142,13 +143,18 @@ async function main() {
   await setValue('#product-quantity', '100');
   const tmpImg = path.join(require('os').tmpdir(), 'ui-smoke-' + Date.now() + '.png');
   fs.writeFileSync(tmpImg, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
-  const photoInput = await page.waitForSelector('#product-photo', { visible: false });
-  await photoInput.uploadFile(tmpImg);
+  const [chooser] = await Promise.all([
+    page.waitForFileChooser({ timeout: 8000 }),
+    click('.photo-upload label.btn-ghost'),
+  ]);
+  check('choose photo opens the native file picker', true);
+  await chooser.accept([tmpImg]);
   await page.evaluate(() => {
     const el = document.getElementById('product-photo');
     if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
   });
   await page.waitForFunction(() => (document.getElementById('product-photo-preview').src || '').indexOf('blob:') === 0, { timeout: 8000 });
+  check('selected image shows preview before submit', true);
   await click('#product-form button[type="submit"]');
   await page.waitForFunction(() => window.location.hash === '#/farmer/products', { timeout: 8000 });
   fs.rmSync(tmpImg, { force: true });
@@ -160,6 +166,7 @@ async function main() {
   });
   check('farmer can add a product', typeof addedPhoto === 'string' && addedPhoto !== '');
   check('farmer product saved with uploaded image', typeof addedPhoto === 'string' && addedPhoto.indexOf('/uploads/') === 0);
+  if (typeof addedPhoto === 'string' && addedPhoto.indexOf('/uploads/') === 0) smokeUploads.push(path.basename(addedPhoto));
   let imgProdId = null;
   if (typeof addedPhoto === 'string' && addedPhoto.indexOf('/uploads/') === 0) {
     imgProdId = await page.evaluate(async () => {
@@ -386,6 +393,11 @@ async function main() {
   for (const suffix of ['', '-journal', '-wal', '-shm']) {
     try {
       fs.rmSync(DB_PATH + suffix, { force: true });
+    } catch {}
+  }
+  for (const f of smokeUploads) {
+    try {
+      fs.rmSync(path.join(process.cwd(), 'uploads', f), { force: true });
     } catch {}
   }
 
