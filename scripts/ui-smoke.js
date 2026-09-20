@@ -126,6 +126,19 @@ async function main() {
   await page.waitForSelector('.page-head h2');
   const farmerTitle = await page.$eval('.page-head h2', (n) => n.textContent);
   check('farmer redirected to farmer dashboard', farmerTitle.indexOf('Farmer Dashboard') === 0);
+  await page.waitForFunction(() => ((document.getElementById('nav-avatar').src || '').toString()).indexOf('farmer-default.png') !== -1, { timeout: 8000 });
+  check('farmer dashboard shows default profile image', true);
+  await page.waitForSelector('.profile-chip img.chip-avatar');
+  const farmerChip = await page.$eval('.profile-chip img.chip-avatar', (im) => (im.currentSrc || im.src || '').toString());
+  check('farmer dashboard shows farmer default image', farmerChip.indexOf('farmer-default.png') !== -1);
+  const farmerChipName = await page.$eval('.profile-chip-name', (n) => n.textContent);
+  const farmerChipRole = await page.$eval('.profile-chip-role', (n) => n.textContent);
+  check('farmer dashboard shows user name', farmerChipName === 'Grace Nakato');
+  check('farmer dashboard shows role', farmerChipRole === 'Farmer');
+  await page.reload({ waitUntil: 'load', timeout: 15000 });
+  await page.waitForFunction(() => window.location.hash.indexOf('#/farmer/overview') === 0, { timeout: 8000 });
+  await page.waitForFunction(() => ((document.getElementById('nav-avatar').src || '').toString()).indexOf('farmer-default.png') !== -1, { timeout: 8000 });
+  check('refresh dashboard keeps farmer profile image', true);
 
   step('farmer products');
   await goto('#/farmer/products');
@@ -192,6 +205,17 @@ async function main() {
   step('farmer profile edit');
   await goto('#/profile');
   await page.waitForSelector('#pf-bio');
+  await page.waitForSelector('#pf-avatar');
+  const pfAvatar = await page.$eval('#pf-avatar', (im) => (im.currentSrc || im.src || '').toString());
+  check('profile page shows farmer default image', pfAvatar.indexOf('farmer-default.png') !== -1);
+  const pfPhone = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('.info-item')).some((it) => it.textContent.indexOf('Phone') !== -1 && it.textContent.indexOf('+256772123456') !== -1);
+  });
+  check('profile page shows phone', pfPhone);
+  const pfRole = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('.info-item')).some((it) => it.textContent.indexOf('Role') !== -1 && it.textContent.indexOf('Farmer') !== -1);
+  });
+  check('profile page shows role', pfRole);
   await setValue('#pf-bio', 'Family farm updated via UI test.');
   await click('#view .btn-row .btn-primary');
   await page.waitForFunction(() => {
@@ -227,6 +251,26 @@ async function main() {
   await page.waitForSelector('.product-grid .product-card');
   const cards = await page.$$eval('.product-card', (els) => els.length);
   check('buyer marketplace lists products', cards >= 5);
+  await page.waitForFunction(() => ((document.getElementById('nav-avatar').src || '').toString()).indexOf('buyer-default.png') !== -1, { timeout: 8000 });
+  check('buyer dashboard shows default profile image', true);
+  await page.waitForSelector('.profile-chip img.chip-avatar');
+  const buyerChip = await page.$eval('.profile-chip img.chip-avatar', (im) => (im.currentSrc || im.src || '').toString());
+  const buyerChipName = await page.$eval('.profile-chip-name', (n) => n.textContent);
+  const buyerChipRole = await page.$eval('.profile-chip-role', (n) => n.textContent);
+  check('buyer market shows buyer default image', buyerChip.indexOf('buyer-default.png') !== -1);
+  check('buyer market shows user name', buyerChipName === 'John Okello');
+  check('buyer market shows role', buyerChipRole === 'Buyer');
+  const fallbackSrc = await page.evaluate(() => {
+    const img = new Image();
+    img.src = window.DM.roleAvatarSrc('buyer');
+    img.onerror = function () {
+      img.onerror = null;
+      img.src = window.DM.avatarFallbackData('John Okello');
+    };
+    img.dispatchEvent(new Event('error'));
+    return img.src;
+  });
+  check('missing profile image falls back to placeholder', fallbackSrc.indexOf('data:image/svg+xml') === 0);
   await sleep(500);
   const marketImg = await page.evaluate(() => {
     return Array.from(document.querySelectorAll('.product-card img')).some((im) => {

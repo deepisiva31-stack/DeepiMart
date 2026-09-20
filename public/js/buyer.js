@@ -217,6 +217,7 @@
 
       var container = DM.el('div', { class: 'page' }, [
         pageTitle('Marketplace', 'Buy fresh produce directly from farmers.'),
+        DM.profileChip(DM.getStoredUser(), 'Buyer'),
         DM.el('div', { class: 'section' }, [filterBar, chipRow, DM.el('p', { class: 'result-count', text: productsData.count + ' product(s) found' }), grid]),
       ]);
       view.innerHTML = '';

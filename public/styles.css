@@ -587,6 +587,85 @@ a {
   font-size: 14px;
 }
 
+/* ======================= PROFILE IMAGES ======================= */
+.nav-avatar {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 1px var(--soil-300);
+}
+
+.profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--white);
+  border: 1px solid var(--soil-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 18px;
+}
+
+.chip-avatar {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--green-100);
+}
+
+.profile-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.profile-chip-name {
+  font-size: 16px;
+  color: var(--green-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-chip-role {
+  font-size: 13px;
+  color: var(--soil-500);
+  text-transform: capitalize;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--green-100);
+}
+
+@media (max-width: 560px) {
+  .chip-avatar {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+  }
+
+  .profile-avatar {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+  }
+}
+
 /* ======================= FORMS ======================= */
 .field {
   margin-bottom: 16px;

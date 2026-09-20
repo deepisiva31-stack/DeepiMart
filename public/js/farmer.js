@@ -49,6 +49,7 @@
 
       var container = DM.el('div', { class: 'page' }, [
         pageTitle('Farmer Dashboard', 'Welcome back, ' + me.name + '. Manage your products and orders.'),
+        DM.profileChip(me, 'Farmer'),
         DM.el('div', { class: 'stats-grid' }, [
           statCard('My Products', d.products.length),
           statCard('Approved', approved.length, 'good'),

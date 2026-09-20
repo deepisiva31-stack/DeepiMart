@@ -232,6 +232,57 @@
     return el('span', { class: 'avatar', text: initials });
   }
 
+  function roleAvatarSrc(role) {
+    if (role === 'buyer') return '/assets/images/buyer-default.png';
+    return '/assets/images/farmer-default.png';
+  }
+
+  function avatarFallbackData(name) {
+    var initials = String(name || '?')
+      .split(/\s+/)
+      .map(function (w) {
+        return w.charAt(0);
+      })
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+    var svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
+      '<circle cx="60" cy="60" r="60" fill="#16a34a"/>' +
+      '<text x="60" y="76" font-family="Arial" font-size="44" font-weight="700" fill="#ffffff" text-anchor="middle">' +
+      esc(initials) +
+      '</text></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  function profileImage(user, cls, attrs) {
+    var extra = {};
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        extra[k] = attrs[k];
+      });
+    }
+    var img = el('img', Object.assign(
+      { class: cls || 'avatar-img', alt: user && user.name ? user.name + ' profile picture' : 'Profile picture', loading: 'lazy', src: roleAvatarSrc(user && user.role) },
+      extra
+    ));
+    img.onerror = function () {
+      img.onerror = null;
+      img.src = avatarFallbackData(user && user.name);
+    };
+    return img;
+  }
+
+  function profileChip(user, subtitle) {
+    return el('div', { class: 'profile-chip' }, [
+      profileImage(user, 'chip-avatar'),
+      el('div', { class: 'profile-chip-info' }, [
+        el('strong', { class: 'profile-chip-name', text: user && user.name }),
+        subtitle ? el('span', { class: 'profile-chip-role', text: subtitle }) : null,
+      ]),
+    ]);
+  }
+
   function statusBadge(label, type) {
     return el('span', { class: 'badge badge-' + (type || 'neutral'), text: label });
   }
@@ -287,6 +338,10 @@
     closeModal: closeModal,
     placeholderImage: placeholderImage,
     avatar: avatar,
+    roleAvatarSrc: roleAvatarSrc,
+    avatarFallbackData: avatarFallbackData,
+    profileImage: profileImage,
+    profileChip: profileChip,
     statusBadge: statusBadge,
     setView: setView,
     skeleton: skeleton,

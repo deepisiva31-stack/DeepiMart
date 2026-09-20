@@ -87,6 +87,16 @@
     currentUser = user;
     authView.classList.add('hidden');
     appView.classList.remove('hidden');
+    var navAvatar = document.getElementById('nav-avatar');
+    if (navAvatar) {
+      navAvatar.className = 'nav-avatar';
+      navAvatar.alt = '';
+      navAvatar.src = DM.roleAvatarSrc(user.role);
+      navAvatar.onerror = function () {
+        navAvatar.onerror = null;
+        navAvatar.src = DM.avatarFallbackData(user.name);
+      };
+    }
     document.getElementById('nav-role').textContent = user.role;
     document.getElementById('nav-name').textContent = user.name;
     document.getElementById('nav-role').className = 'role-badge role-' + user.role;
@@ -260,7 +270,7 @@
           ]),
           DM.el('div', { class: 'section' }, [
             DM.el('div', { class: 'profile-card' }, [
-              DM.avatar(user.name),
+              DM.profileImage(user, 'profile-avatar', { id: 'pf-avatar' }),
               DM.el('div', { class: 'profile-info' }, [
                 DM.el('h3', { text: user.name }),
                 DM.el('span', { class: 'badge badge-neutral', text: user.role }),
@@ -277,6 +287,7 @@
           DM.el('div', { class: 'section' }, [
             DM.el('div', { class: 'info-grid' }, [
               DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Email' }), DM.el('span', { text: user.email })]),
+              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Phone' }), DM.el('span', { text: user.phone || '\u2014' })]),
               DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Role' }), DM.el('span', { text: user.role.charAt(0).toUpperCase() + user.role.slice(1) })]),
               DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Member since' }), DM.el('span', { text: DM.formatDate(user.createdAt) })]),
             ]),
