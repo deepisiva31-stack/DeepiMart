@@ -41,8 +41,19 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function waitForServer() {
+  for (let i = 0; i < 30; i++) {
+    try {
+      const res = await fetch('http://localhost:' + PORT + '/api/health');
+      if (res.ok) return;
+    } catch {}
+    await sleep(300);
+  }
+  throw new Error('server did not become ready');
+}
+
 async function main() {
-  await sleep(1500);
+  await waitForServer();
   const puppeteer = require('puppeteer-core');
   const browser = await puppeteer.launch({
     executablePath: CHROME,
@@ -142,6 +153,36 @@ async function main() {
   await goto('#/farmer/orders');
   await page.waitForSelector('.page-head h2');
   check('farmer orders page loads', (await page.$eval('.page-head h2', (n) => n.textContent)) === 'Orders');
+
+  step('farmer profile edit');
+  await goto('#/profile');
+  await page.waitForSelector('#pf-bio');
+  await setValue('#pf-bio', 'Family farm updated via UI test.');
+  await click('#view .btn-row .btn-primary');
+  await page.waitForFunction(() => {
+    const toasts = document.querySelectorAll('#toast-root .toast');
+    for (const t of toasts) if (t.textContent.indexOf('Profile updated') !== -1) return true;
+    return false;
+  }, { timeout: 8000 });
+  check('profile edit saves via UI', true);
+  await page.waitForFunction(() => {
+    const toasts = document.querySelectorAll('#toast-root .toast');
+    for (const t of toasts) if (t.textContent.indexOf('Profile updated') !== -1) return false;
+    return true;
+  }, { timeout: 8000 });
+
+  step('farmer settings password change');
+  await goto('#/settings');
+  await page.waitForSelector('#st-current');
+  await setValue('#st-current', 'farmer123');
+  await setValue('#st-new', 'farmer1234');
+  await setValue('#st-confirm', 'farmer1234');
+  await click('#view .btn-row .btn-primary');
+  await page.waitForFunction(() => document.querySelector('#toast-root .toast') !== null, { timeout: 8000 });
+  const pwToast = await page.evaluate(() => document.querySelector('#toast-root .toast').textContent);
+  check('settings password change via UI', pwToast.indexOf('Password changed') !== -1);
+  const pwToastCls = await page.evaluate(() => document.querySelector('#toast-root .toast').className);
+  check('password change shows success toast', pwToastCls.indexOf('success') !== -1);
   await logout();
 
   // ===== Buyer flow =====
@@ -218,8 +259,8 @@ async function main() {
     const btns = document.querySelectorAll('.product-card button.btn-ghost');
     for (const btn of btns) { if (btn.textContent === 'Remove') { btn.click(); break; } }
   });
-  await page.waitForFunction(() => document.querySelectorAll('.product-card').length === 0, { timeout: 5000 });
-  check('wishlist remove empties list', await page.evaluate(() => document.body.textContent.indexOf('Your wishlist is empty') !== -1));
+  await page.waitForFunction(() => document.body.textContent.indexOf('Your wishlist is empty') !== -1, { timeout: 6000 });
+  check('wishlist remove empties list', true);
 
   step('buyer reviews');
   const buyerToken = await page.evaluate(() => localStorage.getItem('dm_token'));

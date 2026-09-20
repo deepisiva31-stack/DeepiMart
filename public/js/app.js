@@ -219,11 +219,40 @@
   if (document.readyState !== 'loading') init();
 
   function renderProfile() {
-    viewEl.innerHTML = '';
-    viewEl.appendChild(DM.skeleton());
+    viewEl.innerHTML = DM.skeleton();
     DM.api('GET', '/api/auth/me')
       .then(function (data) {
         var user = data.user;
+        var nameInput = DM.el('input', { type: 'text', id: 'pf-name', maxlength: '100', required: 'required', value: user.name });
+        var phoneInput = DM.el('input', { type: 'tel', id: 'pf-phone', maxlength: '30', value: user.phone || '', placeholder: '+256 7xx xxx xxx' });
+        var locationInput = DM.el('input', { type: 'text', id: 'pf-location', maxlength: '120', value: user.location || '', placeholder: 'e.g. Kampala, Uganda' });
+        var bioInput = DM.el('textarea', { id: 'pf-bio', rows: '4', maxlength: '2000', text: user.bio || '', placeholder: 'Tell buyers or farmers a little about yourself.' });
+
+        var saveBtn = DM.el('button', { class: 'btn-primary', text: 'Save changes' });
+        saveBtn.addEventListener('click', async function () {
+          var name = nameInput.value.trim();
+          if (!name) {
+            DM.toast('Please enter your name.', 'error');
+            return;
+          }
+          saveBtn.disabled = true;
+          try {
+            var res = await DM.api('PATCH', '/api/auth/profile', {
+              name: name,
+              phone: phoneInput.value.trim(),
+              location: locationInput.value.trim(),
+              bio: bioInput.value.trim(),
+            });
+            DM.storeSession(DM.getToken(), res.user);
+            document.getElementById('nav-name').textContent = res.user.name;
+            DM.toast('Profile updated.', 'success');
+            renderProfile();
+          } catch (e) {
+            DM.toast(e.message, 'error');
+            saveBtn.disabled = false;
+          }
+        });
+
         var container = DM.el('div', { class: 'page' }, [
           DM.el('div', { class: 'page-head' }, [
             DM.el('h2', { text: 'My Profile' }),
@@ -238,18 +267,18 @@
               ]),
             ]),
             DM.el('div', { class: 'form-grid' }, [
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Email' }), DM.el('span', { text: user.email })]),
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Role' }), DM.el('span', { text: user.role.charAt(0).toUpperCase() + user.role.slice(1) })]),
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Phone' }), DM.el('span', { text: user.phone || 'Not set' })]),
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Location' }), DM.el('span', { text: user.location || 'Not set' })]),
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Bio' }), DM.el('span', { text: user.bio || 'Not set' })]),
-              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Member since' }), DM.el('span', { text: DM.formatDate(user.createdAt) })]),
+              DM.field('Name', nameInput),
+              DM.field('Phone', phoneInput),
+              DM.field('Location', locationInput),
+              DM.field('Bio', bioInput),
             ]),
+            DM.el('div', { class: 'btn-row' }, [saveBtn]),
           ]),
           DM.el('div', { class: 'section' }, [
-            DM.el('div', { class: 'empty-state' }, [
-              DM.el('h3', { text: 'Profile editing coming soon' }),
-              DM.el('p', { text: 'The ability to edit your profile information will be available in a future update.' }),
+            DM.el('div', { class: 'info-grid' }, [
+              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Email' }), DM.el('span', { text: user.email })]),
+              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Role' }), DM.el('span', { text: user.role.charAt(0).toUpperCase() + user.role.slice(1) })]),
+              DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Member since' }), DM.el('span', { text: DM.formatDate(user.createdAt) })]),
             ]),
           ]),
         ]);
@@ -264,19 +293,69 @@
   }
 
   function renderSettings() {
-    viewEl.innerHTML = '';
-    viewEl.appendChild(DM.skeleton());
-    var user = DM.getStoredUser();
+    viewEl.innerHTML = DM.skeleton();
+    var currentInput = DM.el('input', { type: 'password', id: 'st-current', autocomplete: 'current-password', required: 'required' });
+    var newInput = DM.el('input', { type: 'password', id: 'st-new', autocomplete: 'new-password', minlength: '6', required: 'required' });
+    var confirmInput = DM.el('input', { type: 'password', id: 'st-confirm', autocomplete: 'new-password', minlength: '6', required: 'required' });
+    var currentErr = DM.el('p', { class: 'field-error hidden', id: 'st-current-error' });
+    var newErr = DM.el('p', { class: 'field-error hidden', id: 'st-new-error' });
+    var confirmErr = DM.el('p', { class: 'field-error hidden', id: 'st-confirm-error' });
+
+    var saveBtn = DM.el('button', { class: 'btn-primary', text: 'Change password' });
+    saveBtn.addEventListener('click', async function () {
+      currentErr.classList.add('hidden');
+      newErr.classList.add('hidden');
+      confirmErr.classList.add('hidden');
+      var valid = true;
+      if (!currentInput.value) {
+        currentErr.textContent = 'Please enter your current password.';
+        currentErr.classList.remove('hidden');
+        valid = false;
+      }
+      if (!newInput.value || newInput.value.length < 6) {
+        newErr.textContent = 'New password must be at least 6 characters.';
+        newErr.classList.remove('hidden');
+        valid = false;
+      }
+      if (confirmInput.value !== newInput.value) {
+        confirmErr.textContent = 'Passwords do not match.';
+        confirmErr.classList.remove('hidden');
+        valid = false;
+      }
+      if (!valid) return;
+      saveBtn.disabled = true;
+      try {
+        var res = await DM.api('PATCH', '/api/auth/password', {
+          currentPassword: currentInput.value,
+          newPassword: newInput.value,
+        });
+        DM.toast(res.message, 'success');
+        currentInput.value = '';
+        newInput.value = '';
+        confirmInput.value = '';
+        saveBtn.disabled = false;
+      } catch (e) {
+        DM.toast(e.message, 'error');
+        saveBtn.disabled = false;
+      }
+    });
+
     var container = DM.el('div', { class: 'page' }, [
       DM.el('div', { class: 'page-head' }, [
         DM.el('h2', { text: 'Settings' }),
-        DM.el('p', { class: 'page-sub', text: 'Manage your account preferences.' }),
+        DM.el('p', { class: 'page-sub', text: 'Manage your account security.' }),
       ]),
       DM.el('div', { class: 'section' }, [
-        DM.el('div', { class: 'empty-state' }, [
-          DM.el('h3', { text: 'Settings coming soon' }),
-          DM.el('p', { text: 'Account settings, notifications, and preferences will be available in a future update.' }),
+        DM.el('div', { class: 'form-grid' }, [
+          DM.field('Current password', currentInput),
+          currentErr,
+          DM.field('New password', newInput),
+          newErr,
+          DM.field('Confirm new password', confirmInput),
+          confirmErr,
         ]),
+        DM.el('p', { class: 'field-hint', text: 'Changing your password signs out all other devices (this session stays signed in).' }),
+        DM.el('div', { class: 'btn-row' }, [saveBtn]),
       ]),
     ]);
     viewEl.innerHTML = '';

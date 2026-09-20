@@ -525,7 +525,7 @@
 
         var checkoutBtn = DM.el('button', { class: 'btn-primary', text: 'Proceed to checkout - ' + DM.money(data.total) });
         checkoutBtn.addEventListener('click', function () {
-          openCheckout(data.total);
+          openCheckout(data.total, data.items);
         });
 
         container.appendChild(
@@ -550,7 +550,25 @@
     }
   }
 
-  function openCheckout(total) {
+  function openCheckout(total, items) {
+    items = items || [];
+    var summaryRows = items.map(function (item) {
+      return DM.el('tr', null, [
+        DM.el('td', { class: 'td-strong', text: item.productName }),
+        DM.el('td', { class: 'ta-r', text: item.quantity + ' x ' + DM.money(item.price) }),
+        DM.el('td', { class: 'ta-r', text: DM.money(item.subtotal) }),
+      ]);
+    });
+    var summaryTbody = summaryRows.reduce(function (tb, tr) {
+      tb.appendChild(tr);
+      return tb;
+    }, DM.el('tbody'));
+    var summaryTable = DM.el('table', { class: 'data-table co-summary' }, [
+      DM.el('thead', null, [DM.el('tr', null, ['Product', 'Qty x Price', 'Subtotal'].map(function (h) { return DM.el('th', { text: h }); }))]),
+      summaryTbody,
+      DM.el('tfoot', null, [DM.el('tr', null, [DM.el('td', { colspan: '2', class: 'ta-r', text: 'Total' }), DM.el('td', { class: 'ta-r co-total', text: DM.money(total) })])]),
+    ]);
+
     var addressInput = DM.el('textarea', { id: 'co-address', rows: '2', maxlength: '300', placeholder: 'Delivery address, e.g. Namugongo, Kampala', required: 'required' });
     var methodCard = DM.el('input', { type: 'radio', name: 'co-method', value: 'card', id: 'co-card', checked: 'checked' });
     var methodMobile = DM.el('input', { type: 'radio', name: 'co-method', value: 'mobile_money', id: 'co-mobile' });
@@ -573,6 +591,8 @@
     });
 
     var body = DM.el('div', { class: 'checkout-form' }, [
+      DM.el('h4', { class: 'co-title', text: 'Order summary' }),
+      summaryTable,
       DM.el('p', { class: 'checkout-total', text: 'Order total: ' + DM.money(total) }),
       DM.field('Delivery address', addressInput),
       DM.el('div', { class: 'field' }, [

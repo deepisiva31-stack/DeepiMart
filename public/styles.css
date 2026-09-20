@@ -1023,6 +1023,23 @@ input.invalid {
   max-width: 520px;
 }
 
+.co-summary {
+  margin: 10px 0 14px;
+}
+
+.co-summary th {
+  font-size: 11px;
+}
+
+.co-summary .co-total {
+  color: var(--green-900);
+  font-size: 16px;
+}
+
+.co-title {
+  margin-bottom: 4px;
+}
+
 .pay-option {
   display: flex;
   align-items: center;

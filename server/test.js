@@ -55,6 +55,17 @@ async function patch(url, body, token) {
   return { status: res.status, json };
 }
 
+async function put(url, body, token) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch(BASE + url, { method: 'PUT', headers, body: JSON.stringify(body) });
+  let json = {};
+  try {
+    json = await res.json();
+  } catch (e) {}
+  return { status: res.status, json };
+}
+
 async function del(url, token) {
   const headers = {};
   if (token) headers.Authorization = 'Bearer ' + token;
@@ -120,6 +131,21 @@ async function main() {
   const me = await get('/api/auth/me', farmerTok);
   check('/me returns authenticated user', me.status === 200 && me.json.user.email === 'asha@example.com');
 
+  // --- Profile editing ---
+  const profNoAuth = await patch('/api/auth/profile', { name: 'No' });
+  check('profile update requires auth', profNoAuth.status === 401);
+
+  const profEmpty = await patch('/api/auth/profile', { name: '   ' }, farmerTok);
+  check('profile update rejects empty name', profEmpty.status === 400);
+
+  const prof = await patch('/api/auth/profile', { name: 'Asha', phone: '+256777000111', location: 'Kampala', bio: 'Organic farmer.' }, farmerTok);
+  check('profile update succeeds', prof.status === 200);
+  check('profile update returns new phone', prof.json.user.phone === '+256777000111');
+  check('profile update returns new bio', prof.json.user.bio === 'Organic farmer.');
+
+  const meAfter = await get('/api/auth/me', farmerTok);
+  check('profile changes reflected in /me', meAfter.json.user.phone === '+256777000111' && meAfter.json.user.bio === 'Organic farmer.');
+
   // --- Products ---
   const categories = await get('/api/categories');
   const catId = categories.json.categories[0].id;
@@ -180,6 +206,41 @@ async function main() {
 
   const orderDetail = await get('/api/orders/' + orderId, buyerTok);
   check('order auto-completed on delivery', orderDetail.json.order.status === 'completed');
+
+  // --- Stock management ---
+  const afterOrder = await get('/api/products/' + productId);
+  check('stock reduced after successful order', afterOrder.json.product.quantity === 48);
+
+  const overCart = await post('/api/cart', { productId, quantity: 1000 }, buyerTok);
+  check('cart rejects quantity above stock', overCart.status === 400);
+
+  const zeroCart = await post('/api/cart', { productId, quantity: 0 }, buyerTok);
+  check('cart rejects zero quantity', zeroCart.status === 400);
+
+  const stockUp = await patch('/api/farmer/products/' + productId + '/stock', { quantity: 48 }, farmerTok);
+  check('farmer restores stock before out-of-stock test', stockUp.status === 200);
+
+  const reAdd = await post('/api/cart', { productId, quantity: 2 }, buyerTok);
+  check('buyer re-adds item to cart', reAdd.status === 201);
+  const cartRow = await get('/api/cart', buyerTok);
+  const cartItemId = cartRow.json.items[0].cartItemId;
+
+  const overPut = await put('/api/cart/' + cartItemId, { quantity: 1000 }, buyerTok);
+  check('cart update rejects quantity above stock', overPut.status === 400);
+
+  const stockZero = await patch('/api/farmer/products/' + productId + '/stock', { quantity: 0 }, farmerTok);
+  check('farmer sets stock to zero', stockZero.status === 200);
+  const outOfStockAdd = await post('/api/cart', { productId, quantity: 1 }, buyerTok);
+  check('cannot add out-of-stock product to cart', outOfStockAdd.status === 400);
+
+  const outOfStockOrder = await post('/api/orders', { deliveryAddress: 'Kampala' }, buyerTok);
+  check('cannot place order for out-of-stock product', outOfStockOrder.status === 400);
+  check('out-of-stock order mentions availability', String(outOfStockOrder.json.error).indexOf('available') !== -1);
+
+  const stockRestore = await patch('/api/farmer/products/' + productId + '/stock', { quantity: 48 }, farmerTok);
+  check('farmer restores stock after tests', stockRestore.status === 200);
+  const cleanupCart = await del('/api/cart/' + cartItemId, buyerTok);
+  check('cart cleanup after stock tests', cleanupCart.status === 200);
 
   // --- Price comparison ---
   const compare = await get('/api/products/' + productId + '/compare', buyerTok);
@@ -297,6 +358,36 @@ async function main() {
   const rvListAfter = await get('/api/products/' + productId + '/reviews');
   check('product reviews empty after delete', rvListAfter.json.reviews.length === 0 && rvListAfter.json.totalCount === 0);
 
+  // --- Password change ---
+  const pwNoAuth = await patch('/api/auth/password', { currentPassword: 'secret123', newPassword: 'newpass456' });
+  check('password change requires auth', pwNoAuth.status === 401);
+
+  const pwWrong = await patch('/api/auth/password', { currentPassword: 'wrong', newPassword: 'newpass456' }, buyerTok);
+  check('password change rejects wrong current password', pwWrong.status === 400);
+
+  const pwShort = await patch('/api/auth/password', { currentPassword: 'secret123', newPassword: 'abc' }, buyerTok);
+  check('password change rejects short password', pwShort.status === 400);
+
+  const pwSame = await patch('/api/auth/password', { currentPassword: 'secret123', newPassword: 'secret123' }, buyerTok);
+  check('password change rejects unchanged password', pwSame.status === 400);
+
+  const pwMissing = await patch('/api/auth/password', { currentPassword: '', newPassword: 'newpass456' }, buyerTok);
+  check('password change rejects empty current password', pwMissing.status === 400);
+
+  const secondSession = await post('/api/auth/login', { email: 'kofi@example.com', password: 'secret123' });
+  check('buyer can open a second session', secondSession.status === 200);
+  const extraTok = secondSession.json.token;
+
+  const pwOk = await patch('/api/auth/password', { currentPassword: 'secret123', newPassword: 'newpass456' }, buyerTok);
+  check('password change succeeds', pwOk.status === 200);
+  check('password change signs out other sessions', (await get('/api/auth/me', extraTok)).status === 401);
+  check('current session stays signed in', (await get('/api/auth/me', buyerTok)).status === 200);
+
+  const oldLogin = await post('/api/auth/login', { email: 'kofi@example.com', password: 'secret123' });
+  check('old password no longer works', oldLogin.status === 401);
+  const newLogin = await post('/api/auth/login', { email: 'kofi@example.com', password: 'newpass456' });
+  check('new password works', newLogin.status === 200 && newLogin.json.user.email === 'kofi@example.com');
+
   // --- Admin ---
   const adminUsers = await get('/api/admin/users', adminTok);
   check('admin lists users', adminUsers.status === 200 && adminUsers.json.users.length === 3);
@@ -310,7 +401,7 @@ async function main() {
 
   const disableUser = await patch('/api/admin/users/' + buyerId, { status: 'disabled' }, adminTok);
   check('admin disables user', disableUser.status === 200);
-  const loginDisabled = await post('/api/auth/login', { email: 'kofi@example.com', password: 'secret123' });
+  const loginDisabled = await post('/api/auth/login', { email: 'kofi@example.com', password: 'newpass456' });
   check('disabled user cannot login', loginDisabled.status === 403);
 
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;

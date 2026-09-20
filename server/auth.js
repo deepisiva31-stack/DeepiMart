@@ -95,6 +95,54 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
+router.patch('/profile', requireAuth, (req, res) => {
+  const name = sanitizeString(req.body && req.body.name, 100);
+  const phone = sanitizeString(req.body && req.body.phone, 30);
+  const location = sanitizeString(req.body && req.body.location, 120);
+  const bio = sanitizeString(req.body && req.body.bio, 2000);
+
+  if (!name) {
+    return res.status(400).json({ error: 'Please enter your name.' });
+  }
+
+  db.prepare('UPDATE users SET name = ?, phone = ?, location = ?, bio = ? WHERE id = ?').run(
+    name,
+    phone,
+    location,
+    bio,
+    req.user.id
+  );
+
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  res.json({ message: 'Profile updated.', user: toPublicUser(row) });
+});
+
+router.patch('/password', requireAuth, (req, res) => {
+  const currentPassword = typeof (req.body && req.body.currentPassword) === 'string' ? req.body.currentPassword : '';
+  const newPassword = typeof (req.body && req.body.newPassword) === 'string' ? req.body.newPassword : '';
+
+  if (!currentPassword) {
+    return res.status(400).json({ error: 'Please enter your current password.' });
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'New password must be different from your current password.' });
+  }
+
+  const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  if (!row || !bcrypt.compareSync(currentPassword, row.password_hash)) {
+    return res.status(400).json({ error: 'Current password is incorrect.' });
+  }
+
+  const passwordHash = bcrypt.hashSync(newPassword, 12);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
+  db.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?').run(req.user.id, req.token);
+
+  res.json({ message: 'Password changed. Other sessions signed out.' });
+});
+
 router.post('/logout', requireAuth, (req, res) => {
   destroySession(req.token);
   res.json({ message: 'Logged out.' });
