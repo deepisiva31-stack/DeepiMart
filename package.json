@@ -18,6 +18,9 @@
     "express"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=22.9.0"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",

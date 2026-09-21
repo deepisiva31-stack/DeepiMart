@@ -39,6 +39,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api', productsRouter);
 app.use('/api', marketplaceRouter);
@@ -62,5 +66,5 @@ if (!process.env.DISABLE_SEED) {
 }
 
 app.listen(PORT, () => {
-  console.log(`DeepiMart server running at http://localhost:${PORT}`);
+  console.log(`DeepiMart server listening on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
 });

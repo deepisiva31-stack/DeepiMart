@@ -100,6 +100,12 @@ function check(name, cond) {
 }
 
 async function main() {
+  // --- Health checks (deployment readiness) ---
+  const healthRoot = await get('/health');
+  check('GET /health returns ok', healthRoot.status === 200 && healthRoot.json.status === 'ok');
+  const healthApi = await get('/api/health');
+  check('GET /api/health returns ok', healthApi.status === 200 && healthApi.json.status === 'ok');
+
   // --- Registration & validation (kept from before) ---
   const farmer = await post('/api/auth/register', { name: 'Asha', email: 'asha@example.com', password: 'secret123', role: 'farmer', location: 'Kampala' });
   check('register valid farmer returns 201', farmer.status === 201);

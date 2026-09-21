@@ -3,7 +3,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
 
-const UPLOADS_DIR = path.resolve(__dirname, '..', 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.resolve(__dirname, '..', 'uploads');
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const MIME_EXT = {
