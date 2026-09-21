@@ -39,7 +39,7 @@
         class: 'partner ' + (p.id === activePartnerId ? 'active' : ''),
         dataset: { id: p.id },
       }, [
-        DM.avatar(p.name),
+        DM.profileImage(p, 'avatar'),
         DM.el('div', { class: 'partner-meta' }, [
           DM.el('div', { class: 'partner-name' }, [
             DM.el('span', { text: p.name }),

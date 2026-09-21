@@ -91,7 +91,7 @@
     if (navAvatar) {
       navAvatar.className = 'nav-avatar';
       navAvatar.alt = '';
-      navAvatar.src = DM.roleAvatarSrc(user.role);
+      navAvatar.src = DM.userAvatarSrc(user);
       navAvatar.onerror = function () {
         navAvatar.onerror = null;
         navAvatar.src = DM.avatarFallbackData(user.name);

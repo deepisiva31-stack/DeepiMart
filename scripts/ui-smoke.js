@@ -307,6 +307,11 @@ async function main() {
   check('product detail loads', (await page.$eval('.pd-info h3', (n) => n.textContent)) === 'Fresh Tomatoes');
   await page.waitForSelector('.compare-note');
   check('price comparison section loads', true);
+  const detailFarmerImg = await page.evaluate(() => {
+    const im = document.querySelector('.farmer-card img.avatar');
+    return im ? ((im.currentSrc || im.src || '').toString()).indexOf('farmer-default.png') !== -1 : false;
+  });
+  check('product detail shows farmer default image', detailFarmerImg);
 
   step('buyer add to cart');
   await click('.pd-info .btn-primary');
@@ -337,6 +342,11 @@ async function main() {
   await goto('#/buyer/farmers');
   await page.waitForSelector('.farmer-grid .farmer-card');
   check('location-based farmer search loads', true);
+  const farmersImg = await page.evaluate(() => {
+    const im = document.querySelector('.farmer-grid .farmer-card img.avatar');
+    return im ? ((im.currentSrc || im.src || '').toString()).indexOf('farmer-default.png') !== -1 : false;
+  });
+  check('farmer list shows farmer default image', farmersImg);
 
   step('buyer wishlist');
   await goto('#/buyer/market');

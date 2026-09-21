@@ -127,7 +127,7 @@
       data.users.forEach(function (u) {
         var isSelf = String(u.id) === String(me.id);
         var row = DM.el('tr', null, [
-          DM.el('td', null, [DM.el('div', { class: 'product-cell' }, [DM.avatar(u.name), DM.el('span', { class: 'td-strong', text: u.name + (isSelf ? ' (you)' : '') })])]),
+          DM.el('td', null, [DM.el('div', { class: 'product-cell' }, [DM.profileImage(u, 'avatar'), DM.el('span', { class: 'td-strong', text: u.name + (isSelf ? ' (you)' : '') })])]),
           DM.el('td', { text: u.email }),
           DM.el('td', null, [DM.statusBadge(u.role, u.role === 'admin' ? 'neutral' : u.role === 'farmer' ? 'good' : 'warn')]),
           DM.el('td', { text: u.location || '-' }),

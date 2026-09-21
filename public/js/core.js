@@ -237,6 +237,11 @@
     return '/assets/images/farmer-default.png';
   }
 
+  function userAvatarSrc(user) {
+    if (user && typeof user.avatar === 'string' && user.avatar) return user.avatar;
+    return roleAvatarSrc(user && user.role);
+  }
+
   function avatarFallbackData(name) {
     var initials = String(name || '?')
       .split(/\s+/)
@@ -263,7 +268,7 @@
       });
     }
     var img = el('img', Object.assign(
-      { class: cls || 'avatar-img', alt: user && user.name ? user.name + ' profile picture' : 'Profile picture', loading: 'lazy', src: roleAvatarSrc(user && user.role) },
+      { class: cls || 'avatar-img', alt: user && user.name ? user.name + ' profile picture' : 'Profile picture', loading: 'lazy', src: userAvatarSrc(user) },
       extra
     ));
     img.onerror = function () {
@@ -339,6 +344,7 @@
     placeholderImage: placeholderImage,
     avatar: avatar,
     roleAvatarSrc: roleAvatarSrc,
+    userAvatarSrc: userAvatarSrc,
     avatarFallbackData: avatarFallbackData,
     profileImage: profileImage,
     profileChip: profileChip,

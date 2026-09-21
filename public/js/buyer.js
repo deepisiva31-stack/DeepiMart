@@ -298,7 +298,7 @@
       ]);
 
       var farmerCard = DM.el('div', { class: 'farmer-card' }, [
-        DM.avatar(p.farmer.name),
+        DM.profileImage(p.farmer, 'avatar'),
         DM.el('div', { class: 'farmer-card-meta' }, [
           DM.el('strong', { text: p.farmer.name }),
           DM.el('span', { text: p.farmer.location || 'Location not set' }),
@@ -983,7 +983,7 @@
         } else {
           data.farmers.forEach(function (f) {
             var card = DM.el('div', { class: 'farmer-card' }, [
-              DM.avatar(f.name),
+              DM.profileImage(f, 'avatar'),
               DM.el('div', { class: 'farmer-card-meta' }, [
                 DM.el('strong', { text: f.name }),
                 DM.el('span', { text: f.location || 'Location not set' }),

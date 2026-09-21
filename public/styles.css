@@ -587,6 +587,12 @@ a {
   font-size: 14px;
 }
 
+img.avatar {
+  display: block;
+  object-fit: cover;
+  background: var(--soil-100);
+}
+
 /* ======================= PROFILE IMAGES ======================= */
 .nav-avatar {
   width: 28px;
