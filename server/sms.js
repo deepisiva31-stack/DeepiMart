@@ -63,6 +63,10 @@ async function sendSms(phone, code) {
     if (!res.ok) {
       const err = new Error('SMS service unavailable. Check the server SMS configuration.');
       err.statusCode = 503;
+      try {
+        const body = await res.text();
+        if (body) err.detail = body.slice(0, 500);
+      } catch (readErr) {}
       throw err;
     }
     return { provider };
