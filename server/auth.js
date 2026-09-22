@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 const db = require('./db');
-const otp = require('./otp');
 const { toPublicUser, createSession, destroySession, requireAuth } = require('./session');
 
 const router = express.Router();
@@ -44,48 +43,12 @@ function validateEmail(email) {
   return EMAIL_REGEX.test(email);
 }
 
-router.post('/send-otp', async (req, res) => {
-  try {
-    const phoneValue = sanitizeString(req.body && req.body.phone, 30);
-    const result = await otp.sendOtp(phoneValue, clientIp(req));
-    return res.status(200).json({
-      message: 'OTP sent to ' + result.phone + '. Check your mobile phone.',
-      phone: result.phone,
-      ttlSeconds: result.ttlSeconds,
-      resendAfterSeconds: result.resendAfterSeconds,
-    });
-  } catch (err) {
-    const status = err.statusCode || 500;
-    if (status >= 500) console.error('OTP send error:', err);
-    return res.status(status).json({ error: err.message || 'Internal server error.' });
-  }
-});
-
-router.post('/verify-otp', (req, res) => {
-  try {
-    const phoneValue = sanitizeString(req.body && req.body.phone, 30);
-    const code = sanitizeString(req.body && req.body.code, 10);
-    const result = otp.verifyOtp(phoneValue, code);
-    return res.status(200).json({
-      message: 'Phone number verified. You can now create your account.',
-      phone: result.phone,
-      regToken: result.regToken,
-      ttlSeconds: result.ttlSeconds,
-    });
-  } catch (err) {
-    const status = err.statusCode || 500;
-    if (status >= 500) console.error('OTP verify error:', err);
-    return res.status(status).json({ error: err.message || 'Internal server error.' });
-  }
-});
-
 function validateRegistration(req, res) {
   const name = sanitizeString(req.body && req.body.name, 100);
   const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
   const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
   const role = sanitizeString(req.body && req.body.role, 20).toLowerCase();
-  const phone = otp.normalizePhone(req.body && req.body.phone);
-  const regToken = sanitizeString(req.body && req.body.regToken, 100);
+  const phone = sanitizeString(req.body && req.body.phone, 30);
 
   if (!name) {
     res.status(400).json({ error: 'Please enter your name.' });
@@ -103,24 +66,10 @@ function validateRegistration(req, res) {
     res.status(400).json({ error: 'Please select a valid role.' });
     return null;
   }
-  if (!phone) {
-    res.status(400).json({ error: 'Please enter a valid mobile number.' });
-    return null;
-  }
 
   const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existingEmail) {
     res.status(409).json({ error: 'Email already registered.' });
-    return null;
-  }
-  const existingPhone = db.prepare("SELECT id FROM users WHERE phone = ? AND status = 'active'").get(phone);
-  if (existingPhone) {
-    res.status(409).json({ error: 'Phone number already registered.' });
-    return null;
-  }
-
-  if (!otp.consumeRegToken(phone, regToken)) {
-    res.status(400).json({ error: 'OTP verification required. Please verify your phone number.' });
     return null;
   }
 

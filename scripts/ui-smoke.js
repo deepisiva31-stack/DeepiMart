@@ -19,32 +19,13 @@ const server = spawn(process.execPath, ['--env-file-if-exists=.env', 'server/ind
 });
 server.stdout.on('data', (d) => {
   process.stdout.write('[server] ' + d.toString());
-  const m = d.toString().match(/\[DEV\] OTP for [^:]+: ([0-9]{6})/);
-  if (m) {
-    latestOtp = m[1];
-    otpWaiters.forEach((resolve) => resolve(m[1]));
-    otpWaiters = [];
-  }
 });
 
 let failures = 0;
 let lastStep = 'startup';
 let errors = [];
 let smokeUploads = [];
-let latestOtp = null;
-let otpWaiters = [];
 const t0 = Date.now();
-
-function nextOtp() {
-  return new Promise((resolve) => {
-    if (latestOtp) {
-      const v = String(latestOtp);
-      latestOtp = null;
-      return resolve(v);
-    }
-    otpWaiters.push(resolve);
-  });
-}
 
 function envValue(key) {
   const p = path.resolve(process.cwd(), '.env');
@@ -464,8 +445,8 @@ async function main() {
   check('admin reports render charts', true);
   await logout();
 
-  // ===== Registration via mobile OTP (UI) =====
-  step('register new buyer via OTP');
+  // ===== Registration (UI, email + password) =====
+  step('register new buyer via UI');
   await goto('#/login');
   await page.waitForSelector('#auth-view:not(.hidden)');
   await click('.tab-register');
@@ -475,7 +456,6 @@ async function main() {
   await setValue('#reg-email', newEmail);
   await setValue('#reg-password', 'smokepass123');
   await setValue('#reg-confirm-password', 'smokepass123');
-  await setValue('#reg-phone', '+256701234999');
   await page.evaluate(() => {
     const rb = document.querySelector('#register-form input[name="role"][value="buyer"]');
     if (rb) {
@@ -483,29 +463,19 @@ async function main() {
       rb.dispatchEvent(new Event('change', { bubbles: true }));
     }
   });
-  const regDisabledBefore = await page.$eval('#register-submit', (b) => b.disabled);
-  check('register disabled until OTP verified', regDisabledBefore === true);
-  await click('#send-otp');
-  await page.waitForSelector('#otp-field:not(.hidden)', { timeout: 8000 });
-  const otpCode = await nextOtp();
-  check('mobile OTP code sent (dev console SMS)', typeof otpCode === 'string' && /^[0-9]{6}$/.test(otpCode));
-  await setValue('#reg-otp', otpCode);
-  await click('#verify-otp');
-  await page.waitForFunction(() => document.getElementById('register-submit').disabled === false, { timeout: 8000 });
-  check('register enabled after OTP verification', true);
-  const regMsg = await page.$eval('#otp-message', (n) => n.textContent);
-  check('OTP verified message shown', regMsg.toLowerCase().indexOf('verified') !== -1);
+  const regSubmitEnabled = await page.$eval('#register-submit', (b) => !b.disabled);
+  check('register form is ready to submit', regSubmitEnabled === true);
   await click('#register-submit');
   await page.waitForSelector('#login-form.active', { timeout: 8000 });
   await page.waitForFunction(() => document.getElementById('login-message').textContent.indexOf('Account created') !== -1, { timeout: 8000 });
-  check('registration via OTP succeeds (UI)', true);
+  check('registration via UI succeeds', true);
 
   step('new buyer can log in');
   await setValue('#login-email', newEmail);
   await setValue('#login-password', 'smokepass123');
   await click('#login-submit');
   await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/market') === 0, { timeout: 8000 });
-  check('new OTP-registered buyer can log in', true);
+  check('new registered buyer can log in', true);
   await logout();
 
   // ===== Admin tab + Create New Admin (UI) =====

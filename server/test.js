@@ -1,8 +1,6 @@
 process.env.DB_PATH = './data/test.db';
 process.env.PORT = '3999';
 process.env.DISABLE_SEED = '1';
-process.env.SMS_PROVIDER = 'console';
-process.env.OTP_SECRET = 'test-otp-secret';
 process.env.ADMIN_SETUP_CODE = 'test-admin-setup-123';
 
 const fs = require('node:fs');
@@ -102,44 +100,6 @@ function check(name, cond) {
   }
 }
 
-// The dev SMS sink prints '[DEV] OTP for <phone>: <code>' to the server
-// console. Since the server runs in-process here, we capture console.log for
-// the duration of a send-otp call and recover the code.
-const OTP_LINE = /\[DEV\] OTP for ([^:]+): ([0-9]{6})/;
-
-function extractOtpLine(lines) {
-  const line = lines.find((l) => String(l).indexOf('[DEV] OTP for') !== -1);
-  if (!line) return null;
-  const m = String(line).match(OTP_LINE);
-  return m ? { phone: m[1], code: m[2] } : null;
-}
-
-async function captoOtpSend(phone) {
-  const original = console.log;
-  const lines = [];
-  console.log = (...args) => {
-    lines.push(args.map((a) => String(a)).join(' '));
-  };
-  let send;
-  try {
-    send = await post('/api/auth/send-otp', { phone });
-  } finally {
-    console.log = original;
-  }
-  return { send, lines };
-}
-
-async function otpRegister(payload) {
-  const captured = await captoOtpSend(payload.phone);
-  if (captured.send.status !== 200) return { send: captured.send };
-  const found = extractOtpLine(captured.lines);
-  if (!found) return { send: captured.send, verify: null };
-  const verify = await post('/api/auth/verify-otp', { phone: found.phone, code: found.code });
-  if (verify.status !== 200) return { send: captured.send, verify };
-  const register = await post('/api/auth/register', Object.assign({}, payload, { regToken: verify.json.regToken }));
-  return { send: captured.send, verify, register };
-}
-
 async function main() {
   // --- Health checks (deployment readiness) ---
   const healthRoot = await get('/health');
@@ -147,110 +107,30 @@ async function main() {
   const healthApi = await get('/api/health');
   check('GET /api/health returns ok', healthApi.status === 200 && healthApi.json.status === 'ok');
 
-  // --- OTP registration flow (phone + OTP verification) ---
-  const farmer = await otpRegister({ name: 'Asha', email: 'asha@example.com', password: 'secret123', role: 'farmer', phone: '+256700000001', location: 'Kampala' });
-  check('register valid farmer returns 201', farmer.register && farmer.register.status === 201);
-  check('register response has user email', farmer.register && farmer.register.json.user.email === 'asha@example.com');
-  check('register response has role', farmer.register && farmer.register.json.user.role === 'farmer');
-  check('register response has phone', farmer.register && farmer.register.json.user.phone === '+256700000001');
+  // --- Registration (email + password) ---
+  const farmer = await post('/api/auth/register', { name: 'Asha', email: 'asha@example.com', password: 'secret123', role: 'farmer', phone: '+256700000001', location: 'Kampala' });
+  check('register valid farmer returns 201', farmer.status === 201);
+  check('register response has user email', farmer.json.user.email === 'asha@example.com');
+  check('register response has role', farmer.json.user.role === 'farmer');
+  check('register response has phone', farmer.json.user.phone === '+256700000001');
 
-  const otpNotGiven = await post('/api/auth/register', { name: 'Zoe', email: 'zoe@example.com', password: 'secret123', role: 'buyer', phone: '+256700000012' });
-  check('register without OTP rejected', otpNotGiven.status === 400 && otpNotGiven.json.error === 'OTP verification required. Please verify your phone number.');
-
-  const otpBadToken = await post('/api/auth/register', { name: 'Zeta', email: 'zeta@example.com', password: 'secret123', role: 'buyer', phone: '+256700000013', regToken: 'not-a-real-token' });
-  check('register with invalid reg token rejected', otpBadToken.status === 400 && otpBadToken.json.error === 'OTP verification required. Please verify your phone number.');
-
-  // Duplicate email is still blocked and does NOT burn the verified token.
-  const dupPhone = '+256700000011';
-  const dupOtp = await captoOtpSend(dupPhone);
-  let dupToken = null;
-  if (dupOtp.send.status === 200) {
-    const dupFound = extractOtpLine(dupOtp.lines);
-    if (dupFound) dupToken = (await post('/api/auth/verify-otp', { phone: dupPhone, code: dupFound.code })).json.regToken || null;
-  }
-  const dup = await post('/api/auth/register', { name: 'Asha2', email: 'asha@example.com', password: 'secret123', role: 'buyer', phone: dupPhone, regToken: dupToken });
+  const dup = await post('/api/auth/register', { name: 'Asha2', email: 'asha@example.com', password: 'secret123', role: 'buyer', phone: '+256700000011' });
   check('duplicate email returns 409', dup.status === 409);
   check('duplicate email message', dup.json.error === 'Email already registered.');
 
-  const badEmail = await post('/api/auth/register', { name: 'Bob', email: 'not-an-email', password: 'secret123', role: 'farmer', phone: '+256700000014' });
+  const badEmail = await post('/api/auth/register', { name: 'Bob', email: 'not-an-email', password: 'secret123', role: 'farmer' });
   check('invalid email returns 400', badEmail.status === 400);
   check('invalid email message', badEmail.json.error === 'Please enter a valid email address.');
-
-  const badPhone = await post('/api/auth/send-otp', { phone: '12' });
-  check('send-otp rejects invalid phone', badPhone.status === 400 && badPhone.json.error === 'Please enter a valid mobile number.');
 
   const badRole = await post('/api/auth/register', { name: 'Bob', email: 'bob@example.com', password: 'secret123', role: 'admin', phone: '+256700000015' });
   check('admin role cannot self-register', badRole.status === 400);
 
-  const buyer = await otpRegister({ name: 'Kofi', email: 'kofi@example.com', password: 'secret123', role: 'buyer', phone: '+256700000002', location: 'Accra' });
-  check('register valid buyer returns 201', buyer.register && buyer.register.status === 201);
+  const buyer = await post('/api/auth/register', { name: 'Kofi', email: 'kofi@example.com', password: 'secret123', role: 'buyer', phone: '+256700000002', location: 'Accra' });
+  check('register valid buyer returns 201', buyer.status === 201);
 
-  // --- Wrong-code attempts caps the code ---
-  const wPhone = '+256700000031';
-  const ws = await captoOtpSend(wPhone);
-  check('send-otp returns code metadata', ws.send.status === 200 && ws.send.json.ttlSeconds === 300 && ws.send.json.resendAfterSeconds === 60);
-  const wsOtp = extractOtpLine(ws.lines);
-  const wrongCode = wsOtp ? String((parseInt(wsOtp.code, 10) + 1) % 1000000).padStart(6, '0') : '111111';
-  const w1 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('wrong OTP reports attempts left', w1.status === 400 && w1.json.error === 'Invalid OTP. 4 attempts left.');
-  const w2 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('second wrong OTP reports 3 left', w2.status === 400 && w2.json.error === 'Invalid OTP. 3 attempts left.');
-  const w3 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('third wrong OTP reports 2 left', w3.status === 400 && w3.json.error === 'Invalid OTP. 2 attempts left.');
-  const w4 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('fourth wrong OTP reports 1 left', w4.status === 400 && w4.json.error === 'Invalid OTP. 1 attempts left.');
-  const w5 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('fifth wrong OTP locks the code', w5.status === 429 && w5.json.error === 'Too many verification attempts. Please request a new OTP.');
-  const w6 = await post('/api/auth/verify-otp', { phone: wPhone, code: wrongCode });
-  check('locked OTP no longer verifiable', w6.status === 400);
-
-  // Already-registered phones cannot receive a new OTP.
-  const phoneTaken = await post('/api/auth/send-otp', { phone: '+256700000001' });
-  check('send-otp rejects registered phone', phoneTaken.status === 409 && phoneTaken.json.error === 'Phone number already registered.');
-
-  // Expired OTP cannot be verified.
-  const expPhone = '+256700000050';
-  const es = await captoOtpSend(expPhone);
-  const expOtp = extractOtpLine(es.lines);
-  if (expOtp) {
-    db.prepare("UPDATE otp_requests SET expires_at = datetime('now', '-1 minute') WHERE phone = ? AND used = 0").run(expPhone);
-    const ev = await post('/api/auth/verify-otp', { phone: expPhone, code: expOtp.code });
-    check('expired OTP rejected', ev.status === 400 && ev.json.error === 'OTP has expired. Please request a new code.');
-  } else {
-    check('expired OTP rejected', false);
-  }
-
-  // Resend cooldown blocks immediate re-sends.
-  const coPhone = '+256700000040';
-  const co1 = await captoOtpSend(coPhone);
-  check('first send-otp succeeds', co1.send.status === 200);
-  const co2 = await post('/api/auth/send-otp', { phone: coPhone });
-  check('resend within cooldown blocked', co2.status === 429 && co2.json.error.indexOf('Please wait') === 0);
-
-  // Successful verification mints a single-use registration token.
-  const suPhone = '+256700000060';
-  const su = await captoOtpSend(suPhone);
-  if (su.send.status === 200) {
-    const suOtp = extractOtpLine(su.lines);
-    const suVerify = suOtp ? await post('/api/auth/verify-otp', { phone: suPhone, code: suOtp.code }) : null;
-    check('verify-otp mints 48-hex reg token', suVerify && suVerify.status === 200 && /^[0-9a-f]{48}$/.test(suVerify.json.regToken || ''));
-    if (suVerify && suVerify.status === 200) {
-      const suRegister = await post('/api/auth/register', { name: 'Nadia', email: 'nadia@example.com', password: 'secret123', role: 'buyer', phone: suPhone, regToken: suVerify.json.regToken });
-      check('register succeeds with verified token', suRegister.status === 201);
-      const suRow = db.prepare('SELECT reg_token FROM otp_requests WHERE phone = ? AND used = 1 ORDER BY id DESC LIMIT 1').get(suPhone);
-      check('reg token cleared after use (single-use)', suRow && suRow.reg_token === '');
-    }
-  }
-
-  // Per-IP rate limit (10 OTPs per 15 minutes from the same address).
-  const ipFill = [];
-  for (let i = 0; i < 3; i++) {
-    const r = await captoOtpSend('+25670000' + String(10 + i).padStart(4, '0'));
-    ipFill.push(r.send.status);
-  }
-  check('IP fill sends allowed', ipFill.every((s) => s === 200));
-  const ipBlocked = await post('/api/auth/send-otp', { phone: '+256700000111' });
-  check('IP rate limit blocks 11th send', ipBlocked.status === 429 && ipBlocked.json.error === 'Too many OTP requests. Try again later.');
+  // Registration succeeds with just email + password (no OTP verification).
+  const plain = await post('/api/auth/register', { name: 'Nadia', email: 'nadia@example.com', password: 'secret123', role: 'buyer', phone: '+256700000060' });
+  check('register succeeds without OTP verification', plain.status === 201);
 
   const adminHash = bcrypt.hashSync('admin123', 12);
   db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')").run('Root', 'root@example.com', adminHash);
@@ -651,7 +531,7 @@ async function main() {
   check('created admin has admin access', mgrAdmin.status === 200 && Array.isArray(mgrAdmin.json.users));
 
   const mgrRegister = await post('/api/auth/register', { name: 'X', email: 'x-admin@example.com', password: 'secret123', role: 'admin' });
-  check('register cannot create admin even via OTP path', mgrRegister.status === 400);
+  check('register cannot create admin', mgrRegister.status === 400);
 
   // --- Admin ---
   const adminUsers = await get('/api/admin/users', adminTok);
