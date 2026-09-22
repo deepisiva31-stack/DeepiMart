@@ -128,9 +128,9 @@ async function main() {
   const buyer = await post('/api/auth/register', { name: 'Kofi', email: 'kofi@example.com', password: 'secret123', role: 'buyer', phone: '+256700000002', location: 'Accra' });
   check('register valid buyer returns 201', buyer.status === 201);
 
-  // Registration succeeds with just email + password (no OTP verification).
+  // Registration succeeds with just email + password.
   const plain = await post('/api/auth/register', { name: 'Nadia', email: 'nadia@example.com', password: 'secret123', role: 'buyer', phone: '+256700000060' });
-  check('register succeeds without OTP verification', plain.status === 201);
+  check('register succeeds via email/password', plain.status === 201);
 
   const adminHash = bcrypt.hashSync('admin123', 12);
   db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')").run('Root', 'root@example.com', adminHash);
