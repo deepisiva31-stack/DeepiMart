@@ -17,13 +17,41 @@ const server = spawn(process.execPath, ['--env-file-if-exists=.env', 'server/ind
   env: { ...process.env, PORT: String(PORT), DB_PATH: './data/ui.db' },
   stdio: 'pipe',
 });
-server.stdout.on('data', (d) => process.stdout.write('[server] ' + d.toString()));
+server.stdout.on('data', (d) => {
+  process.stdout.write('[server] ' + d.toString());
+  const m = d.toString().match(/\[DEV\] OTP for [^:]+: ([0-9]{6})/);
+  if (m) {
+    latestOtp = m[1];
+    otpWaiters.forEach((resolve) => resolve(m[1]));
+    otpWaiters = [];
+  }
+});
 
 let failures = 0;
 let lastStep = 'startup';
 let errors = [];
 let smokeUploads = [];
+let latestOtp = null;
+let otpWaiters = [];
 const t0 = Date.now();
+
+function nextOtp() {
+  return new Promise((resolve) => {
+    if (latestOtp) {
+      const v = String(latestOtp);
+      latestOtp = null;
+      return resolve(v);
+    }
+    otpWaiters.push(resolve);
+  });
+}
+
+function envValue(key) {
+  const p = path.resolve(process.cwd(), '.env');
+  if (!fs.existsSync(p)) return '';
+  const m = fs.readFileSync(p, 'utf8').match(new RegExp('^' + key + '=(.*)$', 'm'));
+  return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+}
 
 function step(name) {
   lastStep = name;
@@ -66,12 +94,17 @@ async function main() {
   global.page = page;
   page.setDefaultTimeout(12000);
   errors = [];
-  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + (e.stack ? ' | ' + e.stack.split('\n').slice(1, 4).join(' > ') : '')));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push('console.error: ' + m.text());
+    if (m.type() === 'error') {
+      const t = m.text() || '';
+      if (/Failed to load resource/.test(t) && /status of 4\d\d/.test(t)) return;
+      errors.push('console.error: ' + m.text());
+    }
+    if (m.type() === 'log') process.stdout.write('[page] ' + m.text() + '\n');
   });
   page.on('response', (r) => {
-    if (r.status() >= 400 && /\/api\//.test(r.url())) errors.push('HTTP ' + r.status() + ' ' + r.url().replace(base, ''));
+    if (r.status() >= 400 && /\/api\//.test(r.url())) errors.push({ kind: 'http', status: r.status(), path: r.url().replace(base, ''), step: lastStep });
   });
 
   const base = 'http://localhost:' + PORT;
@@ -431,6 +464,92 @@ async function main() {
   check('admin reports render charts', true);
   await logout();
 
+  // ===== Registration via mobile OTP (UI) =====
+  step('register new buyer via OTP');
+  await goto('#/login');
+  await page.waitForSelector('#auth-view:not(.hidden)');
+  await click('.tab-register');
+  await page.waitForSelector('#register-form.active');
+  const newEmail = 'smoke' + Date.now() + '@example.com';
+  await setValue('#reg-name', 'Smoke Buyer');
+  await setValue('#reg-email', newEmail);
+  await setValue('#reg-password', 'smokepass123');
+  await setValue('#reg-confirm-password', 'smokepass123');
+  await setValue('#reg-phone', '+256701234999');
+  await page.evaluate(() => {
+    const rb = document.querySelector('#register-form input[name="role"][value="buyer"]');
+    if (rb) {
+      rb.checked = true;
+      rb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  const regDisabledBefore = await page.$eval('#register-submit', (b) => b.disabled);
+  check('register disabled until OTP verified', regDisabledBefore === true);
+  await click('#send-otp');
+  await page.waitForSelector('#otp-field:not(.hidden)', { timeout: 8000 });
+  const otpCode = await nextOtp();
+  check('mobile OTP code sent (dev console SMS)', typeof otpCode === 'string' && /^[0-9]{6}$/.test(otpCode));
+  await setValue('#reg-otp', otpCode);
+  await click('#verify-otp');
+  await page.waitForFunction(() => document.getElementById('register-submit').disabled === false, { timeout: 8000 });
+  check('register enabled after OTP verification', true);
+  const regMsg = await page.$eval('#otp-message', (n) => n.textContent);
+  check('OTP verified message shown', regMsg.toLowerCase().indexOf('verified') !== -1);
+  await click('#register-submit');
+  await page.waitForSelector('#login-form.active', { timeout: 8000 });
+  await page.waitForFunction(() => document.getElementById('login-message').textContent.indexOf('Account created') !== -1, { timeout: 8000 });
+  check('registration via OTP succeeds (UI)', true);
+
+  step('new buyer can log in');
+  await setValue('#login-email', newEmail);
+  await setValue('#login-password', 'smokepass123');
+  await click('#login-submit');
+  await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/market') === 0, { timeout: 8000 });
+  check('new OTP-registered buyer can log in', true);
+  await logout();
+
+  // ===== Admin tab + Create New Admin (UI) =====
+  step('admin tab shows admin login');
+  await goto('#/login');
+  await page.waitForSelector('#auth-view:not(.hidden)');
+  await click('.tab-admin');
+  await page.waitForSelector('#admin-login-form.active');
+  check('admin tab shows admin login form', true);
+
+  const beforeAdminErr = errors.length;
+  await setValue('#admin-email', 'admin@deepimart.com');
+  await setValue('#admin-password', 'definitely-wrong');
+  await click('#admin-login-submit');
+  await page.waitForFunction(() => document.getElementById('admin-message').textContent.indexOf('Invalid') !== -1, { timeout: 8000 });
+  check('admin login rejects wrong password', true);
+  errors.splice(beforeAdminErr);
+
+  const setupCode = envValue('ADMIN_SETUP_CODE');
+  if (!setupCode) {
+    check('ADMIN_SETUP_CODE present in .env for Create New Admin UI test', false);
+  } else {
+    step('create new admin via UI');
+    await click('#admin-create-toggle');
+    await page.waitForSelector('#admin-create-form.active');
+    const newAdminEmail = 'uiscreenadmin' + Date.now() + '@example.com';
+    await setValue('#admin-new-name', 'UI Screen Admin');
+    await setValue('#admin-new-email', newAdminEmail);
+    await setValue('#admin-new-password', 'adminpass123');
+    await setValue('#admin-new-confirm', 'adminpass123');
+    await setValue('#admin-setup-code', setupCode);
+    await click('#admin-create-submit');
+    await page.waitForFunction(() => document.getElementById('admin-create-message').textContent.indexOf('created') !== -1, { timeout: 10000 });
+    check('Create New Admin succeeds (UI)', true);
+    await page.waitForSelector('#admin-login-form.active', { timeout: 10000 });
+    await setValue('#admin-email', newAdminEmail);
+    await setValue('#admin-password', 'adminpass123');
+    await click('#admin-login-submit');
+    await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
+    await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
+    check('created admin can log in via Admin tab', true);
+    await logout();
+  }
+
   // ===== Mobile responsiveness =====
   step('mobile viewport');
   await page.setViewport({ width: 390, height: 844 });
@@ -438,9 +557,16 @@ async function main() {
   await page.waitForSelector('.nav-toggle');
   check('mobile nav toggle visible', await page.$eval('.nav-toggle', (n) => getComputedStyle(n).display !== 'none'));
 
-  const jsErrors = errors.filter((e) => !/net::/.test(e));
+  const jsErrors = errors.filter((e) => typeof e !== 'string' || !/net::/.test(e));
   check('no JS console/page errors', jsErrors.length === 0);
-  if (jsErrors.length) console.log(jsErrors.slice(0, 5).join('\n'));
+  if (jsErrors.length) {
+    console.log(
+      jsErrors
+        .slice(0, 5)
+        .map((e) => (typeof e === 'string' ? e : e.kind === 'http' ? 'HTTP ' + e.status + ' ' + e.path + ' (step: ' + e.step + ')' : JSON.stringify(e)))
+        .join('\n')
+    );
+  }
 
   await browser.close();
   server.kill();

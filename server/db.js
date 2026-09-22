@@ -154,6 +154,20 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT    NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS otp_requests (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone      TEXT    NOT NULL,
+    purpose    TEXT    NOT NULL DEFAULT 'register',
+    code_hash  TEXT    NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    reg_token  TEXT    NOT NULL DEFAULT '',
+    used       INTEGER NOT NULL DEFAULT 0,
+    ip         TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT    NOT NULL,
+    verified_at TEXT
+  );
 `);
 
 if (migrated) {

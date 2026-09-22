@@ -15,7 +15,7 @@ stores uploaded images on disk.
 | Port | `process.env.PORT \|\| 3000` (`server/index.js:14`) | Render injects `PORT` automatically. |
 | Entry file | `server/index.js` (see `package.json` "main" and "start") | Start command is `npm start`. |
 | Seeding | `server/seed.js` runs on boot unless `DISABLE_SEED=1`. It is **idempotent**: it only inserts missing demo users/categories/products and never deletes or overwrites existing rows. | No action needed; set `DISABLE_SEED=1` if you want a clean production database. |
-| Authentication | bcrypt password hashing + opaque random sessions stored in the `sessions` table; tokens sent via `Authorization: Bearer <token>` (over HTTPS/TLS). No secrets stored in source. | Works as-is over Render's HTTPS. No cookies/session secret to configure. |
+| Authentication | bcrypt password hashing + opaque random sessions stored in the `sessions` table; tokens sent via `Authorization: Bearer <token>` (over HTTPS/TLS). No secrets stored in source. Buyer/farmer registration requires a one-time-password (OTP) sent by SMS; codes are stored only as HMAC hashes. Admins can also be self-created with a shared `ADMIN_SETUP_CODE`. | Works as-is over Render's HTTPS. Requires the SMS/OTP env vars (section 4); the `console` SMS provider is for local development only. |
 | Static assets | `public/` (CSS, JS, images) served by `express.static`; the app uses hash-based routing (`#/...`) so no SPA fallback rewrite is needed. | Works as-is. |
 
 Because the app is hash-routed and all API calls use relative URLs, **nothing in the codebase is
@@ -78,7 +78,20 @@ values to the repository. An annotated template lives in `.env.example`.
 | `PORT` | No | (auto) | Render injects this; the app defaults to 3000. |
 | `NODE_ENV` | No | (auto `production`) | Render sets it; keeps error responses generic. |
 | `CORS_ORIGIN` | No | `https://deepimart.onrender.com` | Optional; comma-separated. Leave unset for a same-origin SPA. |
+| `SMS_PROVIDER` | Yes\* | `twilio` | `twilio`, `africastalking`, or `console`. **`console` is DEV/TEST ONLY** (prints the OTP code to the server log and is refused when `NODE_ENV=production`). Required because buyer/farmer registration now needs phone + OTP verification. |
+| `SMS_API_KEY` | Yes\* | Twilio Account SID / AT API key | Provider credential. Twilio: `SMS_API_KEY` = Account SID. Africa's Talking: `SMS_API_KEY` = API key. |
+| `SMS_API_SECRET` | Yes\* | Twilio Auth Token / AT username | Provider credential. Twilio: Auth Token. Africa's Talking: Sandbox/Production username. |
+| `SMS_SENDER` | Yes\* | Twilio phone number / AT sender ID | Outbound sender. Twilio requires a verified outbound number (`+1...`). AT: optional sender ID. |
+| `OTP_SECRET` | Yes | `<long random hex>` | Secret used to HMAC-hash OTP codes before storing them (plaintext codes are **never** persisted). Generate with `openssl rand -hex 32`. |
+| `ADMIN_SETUP_CODE` | Yes\*\* | `<long random code>` | Secret code typed on the **Create New Admin** form (validated server-side only, never sent to the browser). Without it the endpoint returns `503`. |
 | `DISABLE_SEED` | No | `1` | Set to `1` to skip demo seed data. Safe to omit (seed is idempotent). |
+
+\* Required **only** when `SMS_PROVIDER=twilio` / `africastalking`. When SMS sending is not fully
+configured, OTP delivery fails safely with a `503` (the pending OTP row is removed — the server never
+pretends a message was sent).
+
+\*\* Required **only** for the self-service "Create New Admin" flow. The seeded `admin@deepimart.com`
+account keeps working without it.
 
 Minimum working set on a fresh Render service using a `/var/data` disk:
 
@@ -86,6 +99,12 @@ Minimum working set on a fresh Render service using a `/var/data` disk:
 NODE_VERSION=22
 DB_PATH=/var/data/deepimart.db
 UPLOADS_DIR=/var/data/uploads
+SMS_PROVIDER=twilio
+SMS_API_KEY=<twilio account sid>
+SMS_API_SECRET=<twilio auth token>
+SMS_SENDER=<twilio from number>
+OTP_SECRET=<openssl rand -hex 32 output>
+ADMIN_SETUP_CODE=<openssl rand -hex 24 output>
 ```
 
 ## 5. Database requirements

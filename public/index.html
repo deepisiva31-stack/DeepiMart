@@ -18,11 +18,13 @@
       </header>
 
       <div class="tab-bar" role="tablist" aria-label="Authentication">
-        <button type="button" class="tab tab-login active" role="tab" aria-selected="true" data-tab="login">Login</button>
+        <button type="button" class="tab tab-login active" role="tab" aria-selected="true" data-tab="login">Buyer / Farmer</button>
         <button type="button" class="tab tab-register" role="tab" aria-selected="false" data-tab="register">Sign Up</button>
+        <button type="button" class="tab tab-admin" role="tab" aria-selected="false" data-tab="admin">Admin</button>
       </div>
 
       <form id="login-form" class="auth-form active" novalidate>
+        <p class="auth-form-title">Buyer / Farmer Login</p>
         <div class="field">
           <label for="login-email">Email</label>
           <input type="email" id="login-email" name="email" autocomplete="email" placeholder="user@example.com" required />
@@ -59,8 +61,21 @@
           <p class="field-error" id="reg-confirm-error"></p>
         </div>
         <div class="field">
-          <label for="reg-phone">Phone (optional)</label>
-          <input type="text" id="reg-phone" name="phone" autocomplete="tel" placeholder="+256 7xx xxx xxx" />
+          <label for="reg-phone">Mobile number</label>
+          <div class="otp-row">
+            <input type="tel" id="reg-phone" name="phone" autocomplete="tel" placeholder="+256 7xx xxx xxx" required />
+            <button type="button" class="btn-ghost btn-sm" id="send-otp">Send OTP</button>
+          </div>
+          <p class="field-error" id="reg-phone-error"></p>
+        </div>
+        <div class="field otp-field hidden" id="otp-field">
+          <label for="reg-otp">OTP Code</label>
+          <div class="otp-row">
+            <input type="text" id="reg-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" />
+            <button type="button" class="btn-ghost btn-sm" id="verify-otp">Verify OTP</button>
+          </div>
+          <p class="field-error" id="reg-otp-error"></p>
+          <p class="form-message" id="otp-message" role="status"></p>
         </div>
         <div class="field">
           <label for="reg-location">Location (optional)</label>
@@ -79,7 +94,56 @@
           <p class="field-error" id="reg-role-error"></p>
         </fieldset>
         <p class="form-message" id="register-message" role="status"></p>
-        <button type="submit" class="btn-primary" id="register-submit">Create Account</button>
+        <button type="submit" class="btn-primary" id="register-submit" disabled>Create Account</button>
+      </form>
+
+      <form id="admin-login-form" class="auth-form" novalidate>
+        <p class="auth-form-title">Admin Login</p>
+        <div class="field">
+          <label for="admin-email">Admin Email</label>
+          <input type="email" id="admin-email" name="email" autocomplete="email" placeholder="admin@example.com" required />
+          <p class="field-error" id="admin-email-error"></p>
+        </div>
+        <div class="field">
+          <label for="admin-password">Admin Password</label>
+          <input type="password" id="admin-password" name="password" autocomplete="current-password" placeholder="Enter admin password" required />
+          <p class="field-error" id="admin-password-error"></p>
+        </div>
+        <p class="form-message" id="admin-message" role="status"></p>
+        <button type="submit" class="btn-primary" id="admin-login-submit">Login</button>
+        <button type="button" class="link auth-link" id="admin-create-toggle">Create New Admin</button>
+      </form>
+
+      <form id="admin-create-form" class="auth-form" novalidate>
+        <p class="auth-form-title">Create New Admin</p>
+        <div class="field">
+          <label for="admin-new-name">Admin Name</label>
+          <input type="text" id="admin-new-name" autocomplete="name" placeholder="Full name" required />
+          <p class="field-error" id="admin-new-name-error"></p>
+        </div>
+        <div class="field">
+          <label for="admin-new-email">Admin Email</label>
+          <input type="email" id="admin-new-email" autocomplete="email" placeholder="newadmin@example.com" required />
+          <p class="field-error" id="admin-new-email-error"></p>
+        </div>
+        <div class="field">
+          <label for="admin-new-password">Password</label>
+          <input type="password" id="admin-new-password" autocomplete="new-password" placeholder="At least 6 characters" minlength="6" required />
+          <p class="field-error" id="admin-new-password-error"></p>
+        </div>
+        <div class="field">
+          <label for="admin-new-confirm">Confirm Password</label>
+          <input type="password" id="admin-new-confirm" autocomplete="new-password" placeholder="Re-enter password" required />
+          <p class="field-error" id="admin-new-confirm-error"></p>
+        </div>
+        <div class="field">
+          <label for="admin-setup-code">Admin Setup Code</label>
+          <input type="password" id="admin-setup-code" autocomplete="off" placeholder="Provided by the server administrator" required />
+          <p class="field-error" id="admin-setup-code-error"></p>
+        </div>
+        <p class="form-message" id="admin-create-message" role="status"></p>
+        <button type="submit" class="btn-primary" id="admin-create-submit">Create Admin</button>
+        <button type="button" class="link auth-link" id="admin-back-login">Back to Admin Login</button>
       </form>
     </section>
 

@@ -1,12 +1,38 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('node:crypto');
 const db = require('./db');
+const otp = require('./otp');
 const { toPublicUser, createSession, destroySession, requireAuth } = require('./session');
 
 const router = express.Router();
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const ALLOWED_ROLES = new Set(['farmer', 'buyer']);
+
+// In-memory per-IP limiter for the protected admin-setup endpoint (single
+// server instance; brute-force protection for the ADMIN_SETUP_CODE).
+const setupAttempts = new Map();
+const SETUP_LIMIT = 20;
+const SETUP_WINDOW_MS = 15 * 60 * 1000;
+
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim().slice(0, 64);
+}
+
+function setupRateLimited(ip) {
+  const now = Date.now();
+  const rec = (setupAttempts.get(ip) || []).filter((t) => now - t < SETUP_WINDOW_MS);
+  setupAttempts.set(ip, rec);
+  return rec.length >= SETUP_LIMIT;
+}
+
+function recordSetupAttempt(ip) {
+  const now = Date.now();
+  const rec = (setupAttempts.get(ip) || []).filter((t) => now - t < SETUP_WINDOW_MS);
+  rec.push(now);
+  setupAttempts.set(ip, rec);
+}
 
 function sanitizeString(value, maxLength) {
   if (typeof value !== 'string') return '';
@@ -18,37 +44,98 @@ function validateEmail(email) {
   return EMAIL_REGEX.test(email);
 }
 
+router.post('/send-otp', async (req, res) => {
+  try {
+    const phoneValue = sanitizeString(req.body && req.body.phone, 30);
+    const result = await otp.sendOtp(phoneValue, clientIp(req));
+    return res.status(200).json({
+      message: 'OTP sent to ' + result.phone + '. Check your mobile phone.',
+      phone: result.phone,
+      ttlSeconds: result.ttlSeconds,
+      resendAfterSeconds: result.resendAfterSeconds,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    if (status >= 500) console.error('OTP send error:', err);
+    return res.status(status).json({ error: err.message || 'Internal server error.' });
+  }
+});
+
+router.post('/verify-otp', (req, res) => {
+  try {
+    const phoneValue = sanitizeString(req.body && req.body.phone, 30);
+    const code = sanitizeString(req.body && req.body.code, 10);
+    const result = otp.verifyOtp(phoneValue, code);
+    return res.status(200).json({
+      message: 'Phone number verified. You can now create your account.',
+      phone: result.phone,
+      regToken: result.regToken,
+      ttlSeconds: result.ttlSeconds,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    if (status >= 500) console.error('OTP verify error:', err);
+    return res.status(status).json({ error: err.message || 'Internal server error.' });
+  }
+});
+
+function validateRegistration(req, res) {
+  const name = sanitizeString(req.body && req.body.name, 100);
+  const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
+  const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+  const role = sanitizeString(req.body && req.body.role, 20).toLowerCase();
+  const phone = otp.normalizePhone(req.body && req.body.phone);
+  const regToken = sanitizeString(req.body && req.body.regToken, 100);
+
+  if (!name) {
+    res.status(400).json({ error: 'Please enter your name.' });
+    return null;
+  }
+  if (!validateEmail(email)) {
+    res.status(400).json({ error: 'Please enter a valid email address.' });
+    return null;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    return null;
+  }
+  if (!ALLOWED_ROLES.has(role)) {
+    res.status(400).json({ error: 'Please select a valid role.' });
+    return null;
+  }
+  if (!phone) {
+    res.status(400).json({ error: 'Please enter a valid mobile number.' });
+    return null;
+  }
+
+  const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existingEmail) {
+    res.status(409).json({ error: 'Email already registered.' });
+    return null;
+  }
+  const existingPhone = db.prepare("SELECT id FROM users WHERE phone = ? AND status = 'active'").get(phone);
+  if (existingPhone) {
+    res.status(409).json({ error: 'Phone number already registered.' });
+    return null;
+  }
+
+  if (!otp.consumeRegToken(phone, regToken)) {
+    res.status(400).json({ error: 'OTP verification required. Please verify your phone number.' });
+    return null;
+  }
+
+  return { name, email, password, role, phone };
+}
+
 router.post('/register', (req, res) => {
   try {
-    const name = sanitizeString(req.body && req.body.name, 100);
-    const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
-    const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
-    const role = sanitizeString(req.body && req.body.role, 20).toLowerCase();
-    const phone = sanitizeString(req.body && req.body.phone, 30);
-    const location = sanitizeString(req.body && req.body.location, 120);
+    const data = validateRegistration(req, res);
+    if (!data) return;
 
-    if (!name) {
-      return res.status(400).json({ error: 'Please enter your name.' });
-    }
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: 'Please enter a valid email address.' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
-    }
-    if (!ALLOWED_ROLES.has(role)) {
-      return res.status(400).json({ error: 'Please select a valid role.' });
-    }
-
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existing) {
-      return res.status(409).json({ error: 'Email already registered.' });
-    }
-
-    const passwordHash = bcrypt.hashSync(password, 12);
+    const passwordHash = bcrypt.hashSync(data.password, 12);
     const result = db
       .prepare('INSERT INTO users (name, email, password_hash, role, phone, location) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(name, email, passwordHash, role, phone, location);
+      .run(data.name, data.email, passwordHash, data.role, data.phone, sanitizeString(req.body && req.body.location, 120));
 
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     return res.status(201).json({ message: 'Account created successfully.', user: toPublicUser(row) });
@@ -57,6 +144,70 @@ router.post('/register', (req, res) => {
       return res.status(409).json({ error: 'Email already registered.' });
     }
     console.error('Registration error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Protected, env-gated admin self-service account creation (forgotten admin
+// access recovery). Validates ADMIN_SETUP_CODE on the server; never exposed
+// to the browser. Existing accounts are never modified.
+router.post('/admin/setup', (req, res) => {
+  try {
+    const expected = process.env.ADMIN_SETUP_CODE;
+    if (!expected || !String(expected).trim()) {
+      return res.status(503).json({ error: 'Admin setup is not enabled on this server.' });
+    }
+    const ip = clientIp(req);
+    if (setupRateLimited(ip)) {
+      return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    }
+
+    const name = sanitizeString(req.body && req.body.name, 100);
+    const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
+    const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+    const setupCode = typeof (req.body && req.body.setupCode) === 'string' ? req.body.setupCode : '';
+
+    if (!name) {
+      recordSetupAttempt(ip);
+      return res.status(400).json({ error: 'Please enter your name.' });
+    }
+    if (!validateEmail(email)) {
+      recordSetupAttempt(ip);
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    if (password.length < 6) {
+      recordSetupAttempt(ip);
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    const a = Buffer.from(String(expected).trim());
+    const b = Buffer.from(String(setupCode).trim());
+    const codeOk = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!codeOk) {
+      recordSetupAttempt(ip);
+      return res.status(403).json({ error: 'Invalid Admin Setup Code.' });
+    }
+
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (existing) {
+      recordSetupAttempt(ip);
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+
+    const passwordHash = bcrypt.hashSync(password, 12);
+    const result = db
+      .prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')")
+      .run(name, email, passwordHash);
+
+    return res.status(201).json({
+      message: 'Admin account created. You can now log in.',
+      admin: { id: result.lastInsertRowid, name, email, role: 'admin' },
+    });
+  } catch (err) {
+    if (String(err && err.message).includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+    console.error('Admin setup error:', err);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });

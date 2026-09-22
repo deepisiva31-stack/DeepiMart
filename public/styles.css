@@ -147,6 +147,49 @@ a {
   display: block;
 }
 
+.auth-form-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--soil-500);
+  margin: 0 0 16px;
+}
+
+.otp-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.otp-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.otp-field {
+  padding: 12px;
+  border: 1px dashed var(--soil-300);
+  border-radius: 12px;
+  background: var(--soil-50);
+}
+
+.auth-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: center;
+}
+
+.auth-link:hover {
+  color: var(--green-700);
+  text-decoration: underline;
+}
+
 .auth-note {
   text-align: center;
   font-size: 12.5px;
