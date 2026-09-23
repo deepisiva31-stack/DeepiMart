@@ -118,17 +118,19 @@
     var node = document.createElement(tag);
     if (attrs) {
       Object.keys(attrs).forEach(function (k) {
-        if (k === 'class') node.className = attrs[k];
-        else if (k === 'html') node.innerHTML = attrs[k];
-        else if (k === 'text') node.textContent = attrs[k];
+        var v = attrs[k];
+        if (v === undefined || v === null) return;
+        if (k === 'class') node.className = v;
+        else if (k === 'html') node.innerHTML = v;
+        else if (k === 'text') node.textContent = v;
         else if (k === 'dataset') {
-          Object.keys(attrs[k]).forEach(function (dk) {
-            node.dataset[dk] = attrs[k][dk];
+          Object.keys(v).forEach(function (dk) {
+            node.dataset[dk] = v[dk];
           });
         } else if (k.indexOf('on') === 0) {
-          node.addEventListener(k.slice(2), attrs[k]);
+          node.addEventListener(k.slice(2), v);
         } else {
-          node.setAttribute(k, attrs[k]);
+          node.setAttribute(k, v);
         }
       });
     }

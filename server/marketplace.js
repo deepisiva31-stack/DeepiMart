@@ -128,7 +128,7 @@ router.post('/cart', requireAuth, requireRole('buyer'), (req, res) => {
 
   db.prepare(
     `INSERT INTO cart_items (buyer_id, product_id, quantity) VALUES (?, ?, ?)
-     ON CONFLICT(buyer_id, product_id) DO UPDATE SET quantity = excluded.quantity`
+     ON CONFLICT(buyer_id, product_id) DO UPDATE SET quantity = MIN(quantity + excluded.quantity, (SELECT p.quantity FROM products p WHERE p.id = excluded.product_id))`
   ).run(req.user.id, productId, quantity);
 
   const row = db

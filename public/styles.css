@@ -1146,6 +1146,12 @@ input.invalid {
   font-size: 13px;
 }
 
+.order-confirm-banner {
+  margin-bottom: 18px;
+  background: var(--soil-50);
+  border: 1px solid var(--soil-200);
+}
+
 .farmer-card {
   display: flex;
   gap: 14px;

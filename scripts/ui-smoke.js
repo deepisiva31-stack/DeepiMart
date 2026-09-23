@@ -332,23 +332,43 @@ async function main() {
   await page.waitForFunction(() => document.getElementById('nav-cart-badge').textContent === '1', { timeout: 8000 });
   check('add to cart updates badge', true);
 
-  step('buyer cart');
+  step('buyer add to cart from marketplace card');
+  await goto('#/buyer/market');
+  await page.waitForSelector('.product-card .btn-ghost');
+  await click('.product-card .btn-ghost');
+  await page.waitForFunction(() => (document.querySelector('.product-card .btn-ghost') || {}).textContent === 'Added', { timeout: 8000 });
+  check('marketplace card add to cart works', true);
   await goto('#/buyer/cart');
+  await page.waitForSelector('.qty-stepper .qty-input');
+  const cardQty = await page.$eval('.qty-stepper .qty-input', (n) => Number(n.value));
+  check('card add accumulates quantity', cardQty === 2);
+  await click('.qty-stepper .qty-step');
+  await page.waitForFunction(() => document.querySelector('.qty-stepper .qty-input').value === '1', { timeout: 8000 });
+  check('cart quantity minus works', true);
+  await click('.qty-stepper .qty-step:last-child');
+  await page.waitForFunction(() => document.querySelector('.qty-stepper .qty-input').value === '2', { timeout: 8000 });
+  check('cart quantity plus works', true);
+
+  step('buyer cart');
   await page.waitForSelector('.checkout-bar .btn-primary');
   check('cart shows checkout', true);
 
-  step('buyer checkout + payment');
+  step('buyer checkout (address + payment method)');
   await click('.checkout-bar .btn-primary');
   await page.waitForSelector('#co-address');
   await setValue('#co-address', 'UI Test Address, Kampala');
-  await setValue('#co-card-name', 'TEST USER');
-  await setValue('#co-card-number', '4242424242424242');
-  await setValue('#co-card-expiry', '12/30');
+  await click('#co-online');
   await click('.modal-foot .btn-primary');
   await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/orders') === 0, { timeout: 15000 });
   await page.waitForSelector('.order-card');
-  const paid = await page.evaluate(() => document.body.textContent.indexOf('Payment: paid') !== -1);
-  check('buyer places + pays order (mock)', paid);
+  const placedOk = await page.evaluate(() => document.body.textContent.indexOf('Order confirmed!') !== -1 && document.body.textContent.indexOf('Payment: paid') !== -1);
+  check('buyer places order (online payment, no card details)', placedOk);
+
+  step('buyer track order');
+  await click('.order-card .btn-ghost');
+  await page.waitForSelector('.timeline');
+  const trackSteps = await page.evaluate(() => Array.from(document.querySelectorAll('.tl-step strong')).map((n) => n.textContent));
+  check('track order shows Placed to Delivered', trackSteps.join(',') === 'Placed,Confirmed,Packed,Shipped,Delivered');
 
   step('buyer farmers');
   await goto('#/buyer/market');

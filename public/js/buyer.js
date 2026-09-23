@@ -631,7 +631,8 @@
         var placed = await DM.api('POST', '/api/orders', { deliveryAddress: address, paymentMethod: method });
         modal.close();
         refreshCartBadge();
-        showOrderConfirmation(placed, address, method);
+        pendingOrderConfirmation = { orders: placed.orders, address: address, method: method };
+        window.location.hash = '#/buyer/orders';
       } catch (e) {
         DM.toast(e.message, 'error');
         payBtn.disabled = false;
@@ -641,45 +642,36 @@
     cancelBtn.addEventListener('click', modal.close);
   }
 
-  function showOrderConfirmation(placed, address, method) {
-    var ordersTotal = (placed.orders || []).reduce(function (sum, o) { return sum + Number(o.total || 0); }, 0);
-    var orderList = DM.el('div', { class: 'confirm-orders' }, (placed.orders || []).map(function (o) {
-      return DM.el('div', { class: 'confirm-order-row' }, [
-        DM.el('strong', { text: o.orderCode }),
-        DM.el('span', { text: DM.money(o.total) }),
-      ]);
-    }));
-    var methodLabel = method === 'cod' ? 'Cash on Delivery' : 'Online Payment';
-    var body = DM.el('div', { class: 'checkout-form', id: 'order-confirm' }, [
+  function buildOrderConfirmationBanner() {
+    if (!pendingOrderConfirmation) return null;
+    var c = pendingOrderConfirmation;
+    pendingOrderConfirmation = null;
+    var ordersTotal = (c.orders || []).reduce(function (sum, o) { return sum + Number(o.total || 0); }, 0);
+    var methodLabel = c.method === 'cod' ? 'Cash on Delivery' : 'Online Payment';
+    return DM.el('div', { class: 'section order-confirm-banner' }, [
       DM.el('p', { class: 'confirm-title', html: '<strong>Order confirmed!</strong> Your order has been placed.' }),
-      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Order(s) placed' }), orderList]),
-      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Total' }), DM.el('div', { class: 'confirm-total', text: DM.money(ordersTotal) })]),
-      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Payment method' }), DM.el('div', { text: methodLabel })]),
-      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Delivery address' }), DM.el('div', { text: address })]),
-      DM.el('p', { class: 'field-hint', text: 'Track your order in My Orders - status updates from Order Placed to Delivered.' }),
+      DM.el('div', { class: 'confirm-orders' }, (c.orders || []).map(function (o) {
+        return DM.el('div', { class: 'confirm-order-row' }, [
+          DM.el('strong', { text: o.orderCode }),
+          DM.el('span', { text: DM.money(o.total) }),
+        ]);
+      })),
+      DM.el('p', { class: 'field-hint', text: 'Total ' + DM.money(ordersTotal) + ' - ' + methodLabel + ' - delivery to: ' + c.address + '. Track your order below.' }),
     ]);
-    var trackBtn = DM.el('button', { class: 'btn-primary', text: 'Go to My Orders' });
-    var shopBtn = DM.el('button', { class: 'btn-ghost', text: 'Continue shopping' });
-    var modal = DM.openModal(body, { title: 'Order confirmation', footer: DM.el('div', { class: 'btn-row' }, [shopBtn, trackBtn]) });
-    trackBtn.addEventListener('click', function () {
-      modal.close();
-      window.location.hash = '#/buyer/orders';
-    });
-    shopBtn.addEventListener('click', function () {
-      modal.close();
-      window.location.hash = '#/buyer/market';
-    });
   }
 
   // ---------------- Orders ----------------
+  var pendingOrderConfirmation = null;
+
   async function renderOrders() {
     DM.setView(DM.skeleton());
     var view = document.getElementById('view');
     try {
       var data = await DM.api('GET', '/api/orders/buyer');
-      var container = DM.el('div', { class: 'page' }, [
-        pageTitle('My Orders', 'Track payments, delivery and order history.'),
-      ]);
+      var children = [pageTitle('My Orders', 'Track payments, delivery and order history.')];
+      var banner = buildOrderConfirmationBanner();
+      if (banner) children.push(banner);
+      var container = DM.el('div', { class: 'page' }, children);
       if (data.orders.length === 0) {
         container.appendChild(DM.emptyState('No orders yet', 'When you place orders, they will appear here.'));
       } else {
@@ -694,7 +686,7 @@
             DM.el('div', { class: 'order-card-head' }, [
               DM.el('div', null, [
                 DM.el('strong', { text: o.orderCode }),
-                DM.el('div', { class: 'order-meta', text: 'Placed ' + DM.formatDate(o.createdAt) + ' - ' + o.farmer.name }),
+                DM.el('div', { class: 'order-meta', text: 'Placed ' + DM.formatDate(o.createdAt) + ' - Ordered by ' + (o.buyer ? o.buyer.name : 'you') + ' - ' + o.farmer.name }),
               ]),
               DM.el('div', { class: 'order-badges' }, [DM.statusBadge(o.status, statusMap[o.status]), paymentBadge]),
             ]),
@@ -787,8 +779,8 @@
       var orderData = await DM.api('GET', '/api/orders/' + orderId);
       var d = deliveryData.delivery;
       var o = orderData.order;
-      var steps = ['placed', 'confirmed', 'processing', 'shipped', 'delivered'];
-      var labels = { placed: 'Order Placed', confirmed: 'Confirmed', processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered' };
+      var steps = ['placed', 'confirmed', 'packed', 'shipped', 'delivered'];
+      var labels = { placed: 'Placed', confirmed: 'Confirmed', packed: 'Packed', shipped: 'Shipped', delivered: 'Delivered' };
       var currentIdx = 0;
       if (o.status === 'completed') currentIdx = 4;
       else if (o.status === 'accepted') currentIdx = 1;
