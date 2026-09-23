@@ -226,7 +226,7 @@
       var row = DM.el('tr', null, [
         DM.el('td', null, [
           DM.el('div', { class: 'product-cell' }, [
-            DM.el('img', { class: 'thumb', src: p.photo || DM.placeholderImage(p.category.name), alt: p.name }),
+            DM.el('img', { class: 'thumb', src: DM.productImage(p), alt: p.name }),
             DM.el('span', { class: 'td-strong', text: p.name }),
           ]),
         ]),
@@ -302,7 +302,7 @@
       location: '',
       photo: '',
     };
-    var photoPreview = p.photo ? p.photo : DM.placeholderImage((categories[0] || {}).name || 'produce');
+    var photoPreview = p.photo ? p.photo : DM.productImage(p);
     var form = DM.el('form', { id: 'product-form', class: 'form' });
     var photoInput = DM.el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', id: 'product-photo' });
     var img = DM.el('img', { class: 'photo-preview', src: photoPreview, alt: 'Product photo', id: 'product-photo-preview' });

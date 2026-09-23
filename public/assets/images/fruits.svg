@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <radialGradient id="apple" cx="40%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#f87171"/>
+      <stop offset="60%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </radialGradient>
+    <radialGradient id="orange" cx="40%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="60%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" rx="18" fill="#fbfaf6"/>
+  <ellipse cx="100" cy="176" rx="68" ry="11" fill="#e7e5e4"/>
+  <path d="M42 168 C42 138 52 122 68 122 H132 C148 122 158 138 158 168 Z" fill="#e7e5e4"/>
+  <ellipse cx="82" cy="124" rx="12" ry="6" fill="#d6d3d1"/>
+  <ellipse cx="118" cy="124" rx="12" ry="6" fill="#d6d3d1"/>
+  <path d="M78 122 C64 118 52 106 46 94 L60 88 C68 98 78 106 88 112 Z" fill="#22c55e"/>
+  <circle cx="86" cy="88" r="34" fill="url(#apple)"/>
+  <rect x="82" y="52" width="7" height="14" rx="3.5" fill="#92400e"/>
+  <path d="M89 58 C96 50 106 48 112 50 C114 56 112 62 106 62 C100 62 94 60 89 58 Z" fill="#4d7c0f"/>
+  <circle cx="138" cy="100" r="30" fill="url(#orange)"/>
+  <ellipse cx="120" cy="108" rx="8" ry="5" fill="#fecaca" opacity="0.4" transform="rotate(-30 120 108)"/>
+  <circle cx="118" cy="62" r="4" fill="#15803d"/>
+</svg>

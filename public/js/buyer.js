@@ -79,7 +79,7 @@
     var ratingHtml = p.averageRating > 0 ? '<p class="pc-meta pc-rating">' + starsHtml(p.averageRating, p.reviewCount) + '</p>' : '';
     var card = DM.el('div', { class: 'product-card' }, [
       DM.el('div', { class: 'product-card-img' }, [
-        DM.el('img', { src: p.photo || DM.placeholderImage(p.category.name), alt: p.name, loading: 'lazy' }),
+        DM.el('img', { src: DM.productImage(p), alt: p.name, loading: 'lazy' }),
         freshnessBadge(p),
         wishlistBtn(p.id),
       ]),
@@ -279,7 +279,7 @@
       }, DM.el('tbody'));
 
       var detailGrid = DM.el('div', { class: 'product-detail' }, [
-        DM.el('div', { class: 'pd-photo' }, [DM.el('img', { src: p.photo || DM.placeholderImage(p.category.name), alt: p.name })]),
+        DM.el('div', { class: 'pd-photo' }, [DM.el('img', { src: DM.productImage(p), alt: p.name })]),
         DM.el('div', { class: 'pd-info' }, [
           DM.el('h3', { text: p.name }),
           DM.statusBadge(p.category.name, 'neutral'),
@@ -508,7 +508,7 @@
           return DM.el('tr', null, [
             DM.el('td', null, [
               DM.el('div', { class: 'product-cell' }, [
-                DM.el('img', { class: 'thumb', src: item.photo || DM.placeholderImage('produce'), alt: item.productName }),
+                DM.el('img', { class: 'thumb', src: DM.productImage(item), alt: item.productName }),
                 DM.el('span', { class: 'td-strong', text: item.productName }),
               ]),
             ]),
@@ -887,7 +887,7 @@
           });
           var card = DM.el('div', { class: 'product-card' }, [
             DM.el('div', { class: 'product-card-img' }, [
-              DM.el('img', { src: item.photo || DM.placeholderImage('produce'), alt: item.productName, loading: 'lazy' }),
+              DM.el('img', { src: DM.productImage(item), alt: item.productName, loading: 'lazy' }),
             ]),
             DM.el('div', { class: 'product-card-body' }, [
               DM.el('h4', { text: item.productName }),

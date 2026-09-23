@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="carton" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e5e7eb"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="18" fill="#fbfaf6"/>
+  <ellipse cx="100" cy="176" rx="52" ry="11" fill="#e7e5e4"/>
+  <rect x="62" y="96" width="76" height="78" rx="8" fill="url(#carton)"/>
+  <path d="M62 96 L100 70 L138 96 Z" fill="url(#carton)"/>
+  <rect x="93" y="56" width="14" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="62" y="122" width="76" height="16" fill="url(#band)"/>
+  <text x="100" y="156" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#0284c7" text-anchor="middle" letter-spacing="1">MILK</text>
+  <rect x="62" y="96" width="76" height="78" rx="8" fill="none" stroke="#d6d3d1" stroke-width="2"/>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="crate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d6a265"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="18" fill="#fbfaf6"/>
+  <ellipse cx="100" cy="178" rx="64" ry="11" fill="#e7e5e4"/>
+  <g fill="#15803d">
+    <path d="M66 84 C58 92 48 62 66 66 C82 62 76 74 70 78 Z"/>
+    <path d="M104 70 C96 76 88 50 104 52 C120 58 116 70 110 66 Z"/>
+    <path d="M138 82 C130 88 124 64 138 66 C152 70 148 82 144 80 Z"/>
+  </g>
+  <path d="M60 96 C56 116 58 130 68 138 H132 C142 130 144 116 140 96 Z" fill="#fb923c"/>
+  <circle cx="100" cy="90" r="26" fill="#dc2626"/>
+  <ellipse cx="90" cy="82" rx="8" ry="5" fill="#fff" opacity="0.3"/>
+  <path d="M48 140 H152 L150 176 H50 Z" fill="url(#crate)"/>
+  <g fill="none" stroke="#713f12" stroke-width="4" stroke-linecap="round">
+    <path d="M60 156 H140"/>
+    <path d="M60 168 H124"/>
+  </g>
+</svg>
