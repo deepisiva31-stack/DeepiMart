@@ -506,39 +506,39 @@ async function main() {
   await page.waitForSelector('#admin-login-form.active');
   check('admin tab shows admin login form', true);
 
-  const beforeAdminErr = errors.length;
-  await setValue('#admin-email', 'admin@deepimart.com');
-  await setValue('#admin-password', 'definitely-wrong');
+  step('demo admin login bypasses credentials');
+  await setValue('#admin-email', 'demo@deepimart.com');
+  await setValue('#admin-password', 'anything-works');
   await click('#admin-login-submit');
-  await page.waitForFunction(() => document.getElementById('admin-message').textContent.indexOf('Invalid') !== -1, { timeout: 8000 });
-  check('admin login rejects wrong password', true);
-  errors.splice(beforeAdminErr);
+  await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
+  await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
+  check('demo admin login opens Admin Dashboard', true);
+  await logout();
 
-  const setupCode = envValue('ADMIN_SETUP_CODE');
-  if (!setupCode) {
-    check('ADMIN_SETUP_CODE present in .env for Create New Admin UI test', false);
-  } else {
-    step('create new admin via UI');
-    await click('#admin-create-toggle');
-    await page.waitForSelector('#admin-create-form.active');
-    const newAdminEmail = 'uiscreenadmin' + Date.now() + '@example.com';
-    await setValue('#admin-new-name', 'UI Screen Admin');
-    await setValue('#admin-new-email', newAdminEmail);
-    await setValue('#admin-new-password', 'adminpass123');
-    await setValue('#admin-new-confirm', 'adminpass123');
-    await setValue('#admin-setup-code', setupCode);
-    await click('#admin-create-submit');
-    await page.waitForFunction(() => document.getElementById('admin-create-message').textContent.indexOf('created') !== -1, { timeout: 10000 });
-    check('Create New Admin succeeds (UI)', true);
-    await page.waitForSelector('#admin-login-form.active', { timeout: 10000 });
-    await setValue('#admin-email', newAdminEmail);
-    await setValue('#admin-password', 'adminpass123');
-    await click('#admin-login-submit');
-    await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
-    await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
-    check('created admin can log in via Admin tab', true);
-    await logout();
-  }
+  step('create new admin via UI');
+  await goto('#/login');
+  await page.waitForSelector('#auth-view:not(.hidden)');
+  await click('.tab-admin');
+  await page.waitForSelector('#admin-login-form.active');
+  await click('#admin-create-toggle');
+  await page.waitForSelector('#admin-create-form.active');
+  check('admin create form has no setup code field', !(await page.$('#admin-setup-code')));
+  const newAdminEmail = 'uiscreenadmin' + Date.now() + '@example.com';
+  await setValue('#admin-new-name', 'UI Screen Admin');
+  await setValue('#admin-new-email', newAdminEmail);
+  await setValue('#admin-new-password', 'adminpass123');
+  await setValue('#admin-new-confirm', 'adminpass123');
+  await click('#admin-create-submit');
+  await page.waitForFunction(() => document.getElementById('admin-create-message').textContent.indexOf('created') !== -1, { timeout: 10000 });
+  check('Create New Admin succeeds (UI) without setup code', true);
+  await page.waitForSelector('#admin-login-form.active', { timeout: 10000 });
+  await setValue('#admin-email', newAdminEmail);
+  await setValue('#admin-password', 'adminpass123');
+  await click('#admin-login-submit');
+  await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
+  await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
+  check('created admin can log in via Admin tab', true);
+  await logout();
 
   // ===== Mobile responsiveness =====
   step('mobile viewport');

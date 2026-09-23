@@ -78,10 +78,11 @@ values to the repository. An annotated template lives in `.env.example`.
 | `PORT` | No | (auto) | Render injects this; the app defaults to 3000. |
 | `NODE_ENV` | No | (auto `production`) | Render sets it; keeps error responses generic. |
 | `CORS_ORIGIN` | No | `https://deepimart.onrender.com` | Optional; comma-separated. Leave unset for a same-origin SPA. |
-| `ADMIN_SETUP_CODE` | Yes\* | `<long random code>` | Secret code typed on the **Create New Admin** form (validated server-side only, never sent to the browser). Without it the endpoint returns `503`. |
+| `ADMIN_SETUP_CODE` | Yes\* | `<long random code>` | Enforced **only in production** (`DEMO_MODE=false`). Validated server-side, never sent to the browser. Without it the endpoint returns `503`. |
+| `DEMO_MODE` | No | `false` | Set to `true` for demo/dev: "Create New Admin" needs no setup code and Admin Login accepts any email/password, redirecting straight to the Admin Dashboard. Defaults to on outside of `NODE_ENV=production`. |
 | `DISABLE_SEED` | No | `1` | Set to `1` to skip demo seed data. Safe to omit (seed is idempotent). |
 
-\* Required **only** for the self-service "Create New Admin" flow. The seeded `admin@deepimart.com`
+\* Required **only** for the self-service "Create New Admin" flow in production (`DEMO_MODE=false`). The seeded `admin@deepimart.com`
 account keeps working without it.
 
 Minimum working set on a fresh Render service using a `/var/data` disk:

@@ -190,7 +190,7 @@
       submit.disabled = true;
       setMessage(adminMessage, '', 'Logging in...');
 
-      DM.api('POST', '/api/auth/login', { email: email, password: passwordInput.value })
+      DM.api('POST', '/api/auth/admin/login', { email: email, password: passwordInput.value })
         .then(function (data) {
           if (data.user.role !== 'admin') {
             setMessage(adminMessage, 'error', 'This account is not an admin. Use the Buyer / Farmer login instead.');
@@ -235,14 +235,12 @@
         email: document.getElementById('admin-new-email'),
         password: document.getElementById('admin-new-password'),
         confirm: document.getElementById('admin-new-confirm'),
-        setupCode: document.getElementById('admin-setup-code'),
       };
       var errors = {
         name: document.getElementById('admin-new-name-error'),
         email: document.getElementById('admin-new-email-error'),
         password: document.getElementById('admin-new-password-error'),
         confirm: document.getElementById('admin-new-confirm-error'),
-        setupCode: document.getElementById('admin-setup-code-error'),
       };
       var valid = true;
 
@@ -270,12 +268,6 @@
       } else {
         setFieldError(fields.confirm, errors.confirm, '');
       }
-      if (!fields.setupCode.value.trim()) {
-        setFieldError(fields.setupCode, errors.setupCode, 'Please enter the Admin Setup Code.');
-        valid = false;
-      } else {
-        setFieldError(fields.setupCode, errors.setupCode, '');
-      }
       if (!valid) return;
 
       var submit = document.getElementById('admin-create-submit');
@@ -286,7 +278,6 @@
         name: fields.name.value.trim(),
         email: fields.email.value.trim(),
         password: fields.password.value,
-        setupCode: fields.setupCode.value.trim(),
       })
         .then(function (data) {
           setMessage(adminCreateMessage, 'success', data.message || 'Admin account created. You can now log in.');
