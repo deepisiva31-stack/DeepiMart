@@ -100,12 +100,19 @@
       addBtn.disabled = true;
     } else {
       addBtn.addEventListener('click', async function () {
+        addBtn.disabled = true;
         try {
           await DM.api('POST', '/api/cart', { productId: p.id, quantity: 1 });
+          addBtn.textContent = 'Added';
           DM.toast('Added to cart.', 'success');
           refreshCartBadge();
         } catch (e) {
           DM.toast(e.message, 'error');
+        } finally {
+          setTimeout(function () {
+            addBtn.disabled = false;
+            addBtn.textContent = 'Add to cart';
+          }, 1000);
         }
       });
     }
@@ -488,11 +495,30 @@
         container.appendChild(DM.el('div', { class: 'btn-row' }, [DM.el('a', { class: 'btn-primary', href: '#/buyer/market', text: 'Go to marketplace' })]));
       } else {
         var rows = data.items.map(function (item) {
-          var qtyInput = DM.el('input', { type: 'number', value: item.quantity, min: '1', max: item.available, step: 'any', 'data-cartid': item.cartItemId });
           var removeBtn = DM.el('button', { class: 'btn-small btn-danger-outline', text: 'Remove' });
+          var minusBtn = DM.el('button', { class: 'qty-step', text: '&#8722;', 'aria-label': 'Decrease quantity', type: 'button' });
+          var plusBtn = DM.el('button', { class: 'qty-step', text: '+', 'aria-label': 'Increase quantity', type: 'button' });
+          var qtyInput = DM.el('input', { class: 'qty-input', type: 'number', value: item.quantity, min: '1', max: item.available, step: 'any', 'data-cartid': item.cartItemId });
+          function applyQty(next) {
+            next = Math.max(1, Math.min(Number(item.available), Number(next) || 1));
+            qtyInput.value = next;
+            qtyInput.dispatchEvent(new Event('change'));
+          }
+          minusBtn.addEventListener('click', function () {
+            if (Number(qtyInput.value) > 1) applyQty(Number(qtyInput.value) - 1);
+          });
+          plusBtn.addEventListener('click', function () {
+            if (Number(qtyInput.value) < Number(item.available)) applyQty(Number(qtyInput.value) + 1);
+          });
           qtyInput.addEventListener('change', async function () {
+            var next = Math.max(1, Math.min(Number(item.available), Number(qtyInput.value) || item.quantity));
+            if (next === Number(item.quantity)) {
+              qtyInput.value = item.quantity;
+              return;
+            }
+            qtyInput.value = next;
             try {
-              await DM.api('PUT', '/api/cart/' + item.cartItemId, { quantity: Number(qtyInput.value) });
+              await DM.api('PUT', '/api/cart/' + item.cartItemId, { quantity: next });
               DM.toast('Cart updated.', 'success');
               renderCart();
             } catch (e) {
@@ -505,6 +531,7 @@
             DM.toast('Removed from cart.', 'success');
             renderCart();
           });
+          var qtyCell = DM.el('div', { class: 'qty-stepper' }, [minusBtn, qtyInput, plusBtn]);
           return DM.el('tr', null, [
             DM.el('td', null, [
               DM.el('div', { class: 'product-cell' }, [
@@ -514,7 +541,7 @@
             ]),
             DM.el('td', { text: item.farmer.name }),
             DM.el('td', { text: DM.money(item.price) + '/' + item.unit }),
-            DM.el('td', null, [qtyInput]),
+            DM.el('td', null, [qtyCell]),
             DM.el('td', { text: DM.money(item.subtotal) }),
             DM.el('td', null, [removeBtn]),
           ]);
@@ -571,25 +598,8 @@
     ]);
 
     var addressInput = DM.el('textarea', { id: 'co-address', rows: '2', maxlength: '300', placeholder: 'Delivery address, e.g. Namugongo, Kampala', required: 'required' });
-    var methodCard = DM.el('input', { type: 'radio', name: 'co-method', value: 'card', id: 'co-card', checked: 'checked' });
-    var methodMobile = DM.el('input', { type: 'radio', name: 'co-method', value: 'mobile_money', id: 'co-mobile' });
-    var cardDetails = DM.el('div', { id: 'co-card-details', class: 'form-grid' }, [
-      DM.field('Name on card', DM.el('input', { type: 'text', id: 'co-card-name', placeholder: 'JOHN OKELLO' })),
-      DM.field('Card number', DM.el('input', { type: 'text', id: 'co-card-number', placeholder: '4242 4242 4242 4242', maxlength: '19' })),
-      DM.field('Expiry (MM/YY)', DM.el('input', { type: 'text', id: 'co-card-expiry', placeholder: '12/30', maxlength: '5' })),
-    ]);
-    var mobileDetails = DM.el('div', { id: 'co-mobile-details', class: 'hidden form-grid' }, [
-      DM.field('Mobile money number', DM.el('input', { type: 'text', id: 'co-mobile-number', placeholder: '+256 7xx xxx xxx' })),
-    ]);
-
-    methodCard.addEventListener('change', function () {
-      cardDetails.classList.remove('hidden');
-      mobileDetails.classList.add('hidden');
-    });
-    methodMobile.addEventListener('change', function () {
-      cardDetails.classList.add('hidden');
-      mobileDetails.classList.remove('hidden');
-    });
+    var methodOnline = DM.el('input', { type: 'radio', name: 'co-method', value: 'online', id: 'co-online', checked: 'checked' });
+    var methodCod = DM.el('input', { type: 'radio', name: 'co-method', value: 'cod', id: 'co-cod' });
 
     var body = DM.el('div', { class: 'checkout-form' }, [
       DM.el('h4', { class: 'co-title', text: 'Order summary' }),
@@ -598,15 +608,13 @@
       DM.field('Delivery address', addressInput),
       DM.el('div', { class: 'field' }, [
         DM.el('label', { text: 'Payment method' }),
-        DM.el('label', { class: 'pay-option' }, [methodCard, DM.el('span', { text: 'Card (demo)' })]),
-        DM.el('label', { class: 'pay-option' }, [methodMobile, DM.el('span', { text: 'Mobile money (demo)' })]),
+        DM.el('label', { class: 'pay-option' }, [methodOnline, DM.el('span', { text: 'Online Payment' })]),
+        DM.el('label', { class: 'pay-option' }, [methodCod, DM.el('span', { text: 'Cash on Delivery' })]),
       ]),
-      cardDetails,
-      mobileDetails,
-      DM.el('p', { class: 'field-hint', html: '<strong>Mock payment gateway.</strong> No real money is charged. Use demo card 4242 4242 4242 4242, any MM/YY expiry.' }),
+      DM.el('p', { class: 'field-hint', html: '<strong>No card details needed.</strong> Online payment is simulated and settles instantly; cash is paid when your order arrives.' }),
     ]);
 
-    var payBtn = DM.el('button', { class: 'btn-primary', text: 'Place order &amp; pay' });
+    var payBtn = DM.el('button', { class: 'btn-primary', text: 'Place order' });
     var cancelBtn = DM.el('button', { class: 'btn-ghost', text: 'Cancel' });
     var foot = DM.el('div', { class: 'btn-row' }, [cancelBtn, payBtn]);
     var modal = DM.openModal(body, { title: 'Checkout', footer: foot, size: 'lg' });
@@ -617,28 +625,13 @@
         return;
       }
       payBtn.disabled = true;
+      var method = document.querySelector('input[name="co-method"]:checked');
+      method = method ? method.value : 'online';
       try {
-        var placed = await DM.api('POST', '/api/orders', { deliveryAddress: address });
-        var method = document.querySelector('input[name="co-method"]:checked').value;
-        var details = {};
-        if (method === 'card') {
-          details = {
-            name: document.getElementById('co-card-name').value.trim(),
-            number: document.getElementById('co-card-number').value.trim(),
-            expiry: document.getElementById('co-card-expiry').value.trim(),
-          };
-        } else {
-          details = { phone: document.getElementById('co-mobile-number').value.trim() };
-        }
-        var paid = [];
-        for (var i = 0; i < placed.orders.length; i++) {
-          var pay = await DM.api('POST', '/api/payments/' + placed.orders[i].id, { method: method, details: details });
-          paid.push(pay);
-        }
+        var placed = await DM.api('POST', '/api/orders', { deliveryAddress: address, paymentMethod: method });
         modal.close();
-        DM.toast(paid.length + ' order(s) paid (mock gateway).', 'success');
         refreshCartBadge();
-        window.location.hash = '#/buyer/orders';
+        showOrderConfirmation(placed, address, method);
       } catch (e) {
         DM.toast(e.message, 'error');
         payBtn.disabled = false;
@@ -646,6 +639,36 @@
       }
     });
     cancelBtn.addEventListener('click', modal.close);
+  }
+
+  function showOrderConfirmation(placed, address, method) {
+    var ordersTotal = (placed.orders || []).reduce(function (sum, o) { return sum + Number(o.total || 0); }, 0);
+    var orderList = DM.el('div', { class: 'confirm-orders' }, (placed.orders || []).map(function (o) {
+      return DM.el('div', { class: 'confirm-order-row' }, [
+        DM.el('strong', { text: o.orderCode }),
+        DM.el('span', { text: DM.money(o.total) }),
+      ]);
+    }));
+    var methodLabel = method === 'cod' ? 'Cash on Delivery' : 'Online Payment';
+    var body = DM.el('div', { class: 'checkout-form', id: 'order-confirm' }, [
+      DM.el('p', { class: 'confirm-title', html: '<strong>Order confirmed!</strong> Your order has been placed.' }),
+      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Order(s) placed' }), orderList]),
+      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Total' }), DM.el('div', { class: 'confirm-total', text: DM.money(ordersTotal) })]),
+      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Payment method' }), DM.el('div', { text: methodLabel })]),
+      DM.el('div', { class: 'field' }, [DM.el('label', { text: 'Delivery address' }), DM.el('div', { text: address })]),
+      DM.el('p', { class: 'field-hint', text: 'Track your order in My Orders - status updates from Order Placed to Delivered.' }),
+    ]);
+    var trackBtn = DM.el('button', { class: 'btn-primary', text: 'Go to My Orders' });
+    var shopBtn = DM.el('button', { class: 'btn-ghost', text: 'Continue shopping' });
+    var modal = DM.openModal(body, { title: 'Order confirmation', footer: DM.el('div', { class: 'btn-row' }, [shopBtn, trackBtn]) });
+    trackBtn.addEventListener('click', function () {
+      modal.close();
+      window.location.hash = '#/buyer/orders';
+    });
+    shopBtn.addEventListener('click', function () {
+      modal.close();
+      window.location.hash = '#/buyer/market';
+    });
   }
 
   // ---------------- Orders ----------------
@@ -663,13 +686,17 @@
         var cards = data.orders.map(function (o) {
           var statusMap = { placed: 'warn', accepted: 'good', rejected: 'bad', completed: 'good', cancelled: 'neutral' };
           var payMap = { pending: 'warn', paid: 'good', refunded: 'neutral', failed: 'bad' };
+          var paymentBadge =
+            o.payment && o.payment.method === 'cod'
+              ? DM.statusBadge('Payment: Cash on delivery', 'neutral')
+              : DM.statusBadge('Payment: ' + o.paymentStatus, payMap[o.paymentStatus]);
           var orderCard = DM.el('div', { class: 'order-card' }, [
             DM.el('div', { class: 'order-card-head' }, [
               DM.el('div', null, [
                 DM.el('strong', { text: o.orderCode }),
                 DM.el('div', { class: 'order-meta', text: 'Placed ' + DM.formatDate(o.createdAt) + ' - ' + o.farmer.name }),
               ]),
-              DM.el('div', { class: 'order-badges' }, [DM.statusBadge(o.status, statusMap[o.status]), DM.statusBadge('Payment: ' + o.paymentStatus, payMap[o.paymentStatus])]),
+              DM.el('div', { class: 'order-badges' }, [DM.statusBadge(o.status, statusMap[o.status]), paymentBadge]),
             ]),
             DM.el('div', { class: 'order-items' }, o.items.map(function (i) {
               return DM.el('div', { class: 'order-item' }, [
@@ -683,7 +710,8 @@
             ]),
           ]);
           var actions = orderCard.querySelector('.btn-row');
-          if (o.paymentStatus === 'pending' && o.status === 'placed') {
+          var isCod = !!(o.payment && o.payment.method === 'cod');
+          if (o.paymentStatus === 'pending' && o.status === 'placed' && !isCod) {
             var payBtn = DM.el('button', { class: 'btn-primary btn-sm', text: 'Pay now' });
             payBtn.addEventListener('click', function () {
               openPaymentModal(o.id, o.total);
@@ -700,7 +728,7 @@
             actions.appendChild(cancelBtn);
           }
           if (o.delivery) {
-            var trackBtn = DM.el('button', { class: 'btn-ghost btn-sm', text: 'Track delivery' });
+            var trackBtn = DM.el('button', { class: 'btn-ghost btn-sm', text: 'Track Order' });
             trackBtn.addEventListener('click', function () {
               renderDelivery(o.id);
             });
@@ -721,46 +749,26 @@
   }
 
   function openPaymentModal(orderId, total) {
-    var methodCard = DM.el('input', { type: 'radio', name: 'pm-method', value: 'card', id: 'pm-card', checked: 'checked' });
-    var methodMobile = DM.el('input', { type: 'radio', name: 'pm-method', value: 'mobile_money', id: 'pm-mobile' });
-    var cardDetails = DM.el('div', { id: 'pm-card-details', class: 'form-grid' }, [
-      DM.field('Name on card', DM.el('input', { type: 'text', id: 'pm-card-name' })),
-      DM.field('Card number', DM.el('input', { type: 'text', id: 'pm-card-number', placeholder: '4242 4242 4242 4242', maxlength: '19' })),
-      DM.field('Expiry (MM/YY)', DM.el('input', { type: 'text', id: 'pm-card-expiry', placeholder: '12/30', maxlength: '5' })),
-    ]);
-    var mobileDetails = DM.el('div', { id: 'pm-mobile-details', class: 'hidden form-grid' }, [
-      DM.field('Mobile money number', DM.el('input', { type: 'text', id: 'pm-mobile-number', placeholder: '+256 7xx xxx xxx' })),
-    ]);
-    methodCard.addEventListener('change', function () {
-      cardDetails.classList.remove('hidden');
-      mobileDetails.classList.add('hidden');
-    });
-    methodMobile.addEventListener('change', function () {
-      cardDetails.classList.add('hidden');
-      mobileDetails.classList.remove('hidden');
-    });
+    var methodOnline = DM.el('input', { type: 'radio', name: 'pm-method', value: 'online', id: 'pm-online', checked: 'checked' });
+    var methodCod = DM.el('input', { type: 'radio', name: 'pm-method', value: 'cod', id: 'pm-cod' });
 
     var body = DM.el('div', { class: 'checkout-form' }, [
       DM.el('p', { class: 'checkout-total', text: 'Amount due: ' + DM.money(total) }),
-      DM.el('label', { class: 'pay-option' }, [methodCard, DM.el('span', { text: 'Card (demo)' })]),
-      DM.el('label', { class: 'pay-option' }, [methodMobile, DM.el('span', { text: 'Mobile money (demo)' })]),
-      cardDetails,
-      mobileDetails,
-      DM.el('p', { class: 'field-hint', html: '<strong>Mock payment gateway.</strong> No real money is charged.' }),
+      DM.el('label', { class: 'pay-option' }, [methodOnline, DM.el('span', { text: 'Online Payment' })]),
+      DM.el('label', { class: 'pay-option' }, [methodCod, DM.el('span', { text: 'Cash on Delivery' })]),
+      DM.el('p', { class: 'field-hint', html: '<strong>No card details needed.</strong> Online payment is simulated; cash is paid on delivery.' }),
     ]);
-    var payBtn = DM.el('button', { class: 'btn-primary', text: 'Pay ' + DM.money(total) });
+    var payBtn = DM.el('button', { class: 'btn-primary', text: 'Confirm payment method' });
     var cancelBtn = DM.el('button', { class: 'btn-ghost', text: 'Cancel' });
     var modal = DM.openModal(body, { title: 'Complete payment', footer: DM.el('div', { class: 'btn-row' }, [cancelBtn, payBtn]) });
     payBtn.addEventListener('click', async function () {
       payBtn.disabled = true;
-      var method = document.querySelector('input[name="pm-method"]:checked').value;
-      var details = method === 'card'
-        ? { name: document.getElementById('pm-card-name').value.trim(), number: document.getElementById('pm-card-number').value.trim(), expiry: document.getElementById('pm-card-expiry').value.trim() }
-        : { phone: document.getElementById('pm-mobile-number').value.trim() };
+      var method = document.querySelector('input[name="pm-method"]:checked');
+      method = method ? method.value : 'online';
       try {
-        await DM.api('POST', '/api/payments/' + orderId, { method: method, details: details });
+        await DM.api('POST', '/api/payments/' + orderId, { method: method });
         modal.close();
-        DM.toast('Payment successful (mock gateway).', 'success');
+        DM.toast(method === 'cod' ? 'Cash on delivery confirmed.' : 'Payment successful (simulated).', 'success');
         renderOrders();
       } catch (e) {
         DM.toast(e.message, 'error');
@@ -775,23 +783,28 @@
     DM.setView(DM.skeleton());
     var view = document.getElementById('view');
     try {
-      var data = await DM.api('GET', '/api/deliveries/' + orderId);
-      var d = data.delivery;
-      var steps = ['processing', 'in_transit', 'out_for_delivery', 'delivered'];
-      var currentIdx = steps.indexOf(d.status);
-      var labels = {
-        processing: 'Processing',
-        in_transit: 'In transit',
-        out_for_delivery: 'Out for delivery',
-        delivered: 'Delivered',
-      };
+      var deliveryData = await DM.api('GET', '/api/deliveries/' + orderId);
+      var orderData = await DM.api('GET', '/api/orders/' + orderId);
+      var d = deliveryData.delivery;
+      var o = orderData.order;
+      var steps = ['placed', 'confirmed', 'processing', 'shipped', 'delivered'];
+      var labels = { placed: 'Order Placed', confirmed: 'Confirmed', processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered' };
+      var currentIdx = 0;
+      if (o.status === 'completed') currentIdx = 4;
+      else if (o.status === 'accepted') currentIdx = 1;
+      if (d) {
+        if (d.status === 'processing') currentIdx = Math.max(currentIdx, 2);
+        if (d.status === 'in_transit' || d.status === 'out_for_delivery') currentIdx = Math.max(currentIdx, 3);
+        if (d.status === 'delivered') currentIdx = 4;
+      }
+      var currentLabel = steps[currentIdx] === undefined ? null : labels[steps[currentIdx]];
       var timeline = steps.map(function (step, i) {
         var state = i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo';
         return DM.el('li', { class: 'tl-step ' + state }, [
           DM.el('span', { class: 'tl-dot' }),
           DM.el('div', null, [
             DM.el('strong', { text: labels[step] }),
-            i < currentIdx ? DM.el('div', { class: 'tl-time', text: 'Completed' }) : null,
+            i < currentIdx ? DM.el('div', { class: 'tl-time', text: 'Completed' }) : i === currentIdx ? DM.el('div', { class: 'tl-time', text: 'In progress' }) : null,
           ]),
         ]);
       });
@@ -819,20 +832,23 @@
         }
       });
 
+      var statusText = (d && d.status ? d.status : o.status).replace(/_/g, ' ');
       var container = DM.el('div', { class: 'page' }, [
         DM.el('a', { class: 'link', href: '#/buyer/orders', text: '&larr; Back to orders' }),
-        pageTitle('Delivery tracking', 'Follow your order from farm to door.'),
+        pageTitle('Track Order', 'Follow your order from farm to door.'),
         DM.el('div', { class: 'section' }, [
           DM.el('div', { class: 'tracking-head' }, [
             DM.el('div', null, [
               DM.el('strong', { text: d.trackingCode }),
               DM.el('div', { text: d.carrier + ' - ' + d.currentLocation }),
             ]),
-            DM.statusBadge(d.status.replace(/_/g, ' '), 'good'),
+            DM.statusBadge(currentLabel || statusText, 'good'),
           ]),
           DM.el('p', { class: 'field-hint', text: 'Estimated delivery: ' + (d.estimatedDelivery ? DM.formatDate(d.estimatedDelivery) : 'n/a') + '  |  This is a demo tracking simulation.' }),
           DM.el('ul', { class: 'timeline' }, timeline),
-          DM.el('div', { class: 'btn-row' }, [simulateBtn]),
+          o.status === 'cancelled' || o.status === 'rejected'
+            ? DM.el('div', { class: 'track-note', html: '<strong>Please note:</strong> This order was ' + DM.esc(o.status) + ' and is no longer being delivered.' })
+            : DM.el('div', { class: 'btn-row' }, [simulateBtn]),
         ]),
         DM.el('div', { class: 'section' }, [
           DM.el('h3', { text: 'Tracking history' }),

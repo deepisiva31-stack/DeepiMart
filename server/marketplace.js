@@ -163,6 +163,10 @@ router.post('/orders', requireAuth, requireRole('buyer'), (req, res) => {
   const deliveryAddress = sanitizeString(req.body && req.body.deliveryAddress, 300);
   if (!deliveryAddress) return res.status(400).json({ error: 'Please enter a delivery address.' });
 
+  // Payment method is chosen at checkout: "online" (instant, simulated) or
+  // "cod" (cash on delivery). Anything else defaults to cash on delivery.
+  const payMethod = sanitizeString(req.body && req.body.paymentMethod, 20) === 'online' ? 'online' : 'cod';
+
   const rows = db
     .prepare(
       `SELECT ci.id AS cart_item_id, ci.quantity, p.id AS product_id, p.farmer_id, p.price,
@@ -220,6 +224,18 @@ router.post('/orders', requireAuth, requireRole('buyer'), (req, res) => {
          VALUES (?, ?, ?, 'processing', 'Farm pickup', ?, ?)`
       ).run(result.lastInsertRowid, trackingCode, 'DeepiMart Go', est, JSON.stringify(history));
 
+      // Record the chosen payment method up front. "online" is paid at
+      // checkout (simulated); "cod" stays pending until goods are received.
+      const payMethodName = payMethod === 'online' ? 'online' : 'cod';
+      const payStatus = payMethod === 'online' ? 'paid' : 'pending';
+      const payRef = (payMethod === 'online' ? 'MOCK-' : 'COD-') + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
+      db.prepare(
+        'INSERT INTO payments (order_id, buyer_id, amount, method, status, reference) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(result.lastInsertRowid, req.user.id, total, payMethodName, payStatus, payRef);
+      if (payMethod === 'online') {
+        db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(result.lastInsertRowid);
+      }
+
       created.push(result.lastInsertRowid);
     }
     db.prepare('DELETE FROM cart_items WHERE buyer_id = ?').run(req.user.id);
@@ -231,7 +247,11 @@ router.post('/orders', requireAuth, requireRole('buyer'), (req, res) => {
   }
 
   const orders = created.map((id) => mapOrder(orderDetailRow(id)));
-  res.status(201).json({ message: 'Orders placed. Complete payment to proceed.', orders });
+  const message =
+    payMethod === 'online'
+      ? 'Orders placed and paid via online payment.'
+      : 'Orders placed. Payment due on delivery (cash).';
+  res.status(201).json({ message, orders });
 });
 
 router.get('/orders/buyer', requireAuth, requireRole('buyer'), (req, res) => {
@@ -312,6 +332,48 @@ router.post('/payments/:orderId', requireAuth, requireRole('buyer'), (req, res) 
   const method = sanitizeString(req.body && req.body.method, 20);
   const details = (req.body && req.body.details) || {};
 
+  // Cash on delivery: no payment taken now, order stays pending.
+  if (method === 'cod') {
+    const reference = 'COD-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
+    db.prepare('INSERT INTO payments (order_id, buyer_id, amount, method, status, reference) VALUES (?, ?, ?, ?, ?, ?)').run(
+      orderId,
+      req.user.id,
+      row.total,
+      'cod',
+      'pending',
+      reference
+    );
+    return res.status(201).json({
+      message: 'Cash on delivery selected. Pay when you receive the order.',
+      payment: { reference, method: 'cod', amount: row.total, status: 'pending' },
+    });
+  }
+
+  // Online payment: instant (simulated) settlement.
+
+  if (method === 'online') {
+    // Supersede any pending cash-on-delivery arrangement.
+    db.prepare("UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND method = 'cod' AND status = 'pending'").run(orderId);
+    const reference = 'MOCK-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
+    db.prepare('INSERT INTO payments (order_id, buyer_id, amount, method, status, reference) VALUES (?, ?, ?, ?, ?, ?)').run(
+      orderId,
+      req.user.id,
+      row.total,
+      'online',
+      'paid',
+      reference
+    );
+    db.prepare("UPDATE orders SET payment_status = 'paid', updated_at = datetime('now') WHERE id = ?").run(orderId);
+    return res.status(201).json({
+      message: 'Online payment successful (simulated).',
+      payment: { reference, method: 'online', amount: row.total, status: 'paid' },
+    });
+  }
+
+  if (method !== 'card' && method !== 'mobile_money') {
+    return res.status(400).json({ error: 'Please choose a payment method.' });
+  }
+
   if (method === 'card') {
     const number = String(details.number || '').replace(/\s+/g, '');
     const expiry = String(details.expiry || '');
@@ -331,6 +393,9 @@ router.post('/payments/:orderId', requireAuth, requireRole('buyer'), (req, res) 
   } else {
     return res.status(400).json({ error: 'Please choose a payment method.' });
   }
+
+  // A real payment supersedes a pending cash-on-delivery arrangement.
+  db.prepare("UPDATE payments SET status = 'cancelled' WHERE order_id = ? AND method = 'cod' AND status = 'pending'").run(orderId);
 
   const reference = 'MOCK-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
   db.prepare('INSERT INTO payments (order_id, buyer_id, amount, method, status, reference) VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -393,6 +458,14 @@ router.post('/deliveries/:orderId/advance', requireAuth, (req, res) => {
 
   if (nextStatus === 'delivered') {
     db.prepare("UPDATE orders SET status = 'completed', updated_at = datetime('now') WHERE id = ?").run(row.id);
+    // Cash on delivery is settled when the goods arrive.
+    const codPay = db
+      .prepare("SELECT id FROM payments WHERE order_id = ? AND method = 'cod' AND status = 'pending' ORDER BY id DESC LIMIT 1")
+      .get(row.id);
+    if (codPay) {
+      db.prepare("UPDATE payments SET status = 'paid' WHERE id = ?").run(codPay.id);
+      db.prepare("UPDATE orders SET payment_status = 'paid', updated_at = datetime('now') WHERE id = ?").run(row.id);
+    }
   }
 
   const updated = db.prepare('SELECT * FROM deliveries WHERE id = ?').get(delivery.id);
