@@ -69,6 +69,7 @@ router.get('/products', (req, res) => {
   const rows = db
     .prepare(
       `SELECT p.id, p.name, p.price, p.unit, p.quantity, p.status, p.created_at,
+              p.photo, p.description, p.location, p.harvest_date, p.freshness,
               u.name AS farmer_name, c.name AS category_name
          FROM products p
          JOIN users u ON u.id = p.farmer_id
@@ -155,6 +156,15 @@ router.get('/reports', (req, res) => {
     .all()
     .reverse();
 
+  const roleCount = usersByRole.reduce((acc, r) => {
+    acc[r.role] = r.n;
+    return acc;
+  }, {});
+  const statusCount = ordersByStatus.reduce((acc, r) => {
+    acc[r.status] = r.n;
+    return acc;
+  }, {});
+
   res.json({
     users: { total: userCounts.n, byRole: usersByRole },
     products: { total: productCounts.n, pending: pendingProducts.n },
@@ -163,6 +173,16 @@ router.get('/reports', (req, res) => {
     topProducts,
     topFarmers,
     dailySales,
+    summary: {
+      users: userCounts.n,
+      buyers: roleCount.buyer || 0,
+      sellers: roleCount.farmer || 0,
+      products: productCounts.n,
+      orders: orderCounts.n,
+      delivered: statusCount.completed || 0,
+      pending: statusCount.placed || 0,
+      cancelled: (statusCount.cancelled || 0) + (statusCount.rejected || 0),
+    },
   });
 });
 

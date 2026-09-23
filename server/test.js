@@ -540,6 +540,11 @@ async function main() {
   check('buyer forbidden from admin', buyerOnly.status === 403);
   const reports = await get('/api/admin/reports', adminTok);
   check('admin reports available', reports.status === 200 && reports.json.orders.total === 1 && reports.json.revenue === 10000);
+  const s = reports.json.summary;
+  check(
+    'admin reports summary counts',
+    reports.status === 200 && !!s && s.orders === 1 && typeof s.buyers === 'number' && typeof s.sellers === 'number' && typeof s.delivered === 'number' && typeof s.pending === 'number' && typeof s.cancelled === 'number'
+  );
 
   const stock = await patch('/api/farmer/products/' + productId + '/stock', { quantity: 25 }, farmerTok);
   check('farmer updates stock', stock.status === 200 && stock.json.product.quantity === 25);
