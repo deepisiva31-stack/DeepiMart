@@ -117,12 +117,15 @@ async function main() {
   }
 
   async function login(email, password) {
+    var role = email.indexOf('admin@') === 0 ? 'admin' : email.indexOf('farmer@') === 0 ? 'farmer' : 'buyer';
     step('login ' + email);
     await page.goto(base + '/#/login', { waitUntil: 'load', timeout: 15000 });
     await page.waitForSelector('#auth-view:not(.hidden)');
-    await setValue('#login-email', email);
-    await setValue('#login-password', password);
-    await click('#login-submit');
+    await click('.tab-' + role);
+    await page.waitForSelector('#' + role + '-login-form.active');
+    await setValue('#' + role + '-email', email);
+    await setValue('#' + role + '-password', password);
+    await click(role === 'admin' ? '#admin-login-submit' : '#' + role + '-submit');
   }
 
   async function logout() {
@@ -474,7 +477,7 @@ async function main() {
   step('register new buyer via UI');
   await goto('#/login');
   await page.waitForSelector('#auth-view:not(.hidden)');
-  await click('.tab-register');
+  await click('#auth-switch-btn');
   await page.waitForSelector('#register-form.active');
   const newEmail = 'smoke' + Date.now() + '@example.com';
   await setValue('#reg-name', 'Smoke Buyer');
@@ -491,14 +494,14 @@ async function main() {
   const regSubmitEnabled = await page.$eval('#register-submit', (b) => !b.disabled);
   check('register form is ready to submit', regSubmitEnabled === true);
   await click('#register-submit');
-  await page.waitForSelector('#login-form.active', { timeout: 8000 });
-  await page.waitForFunction(() => document.getElementById('login-message').textContent.indexOf('Account created') !== -1, { timeout: 8000 });
+  await page.waitForSelector('#buyer-login-form.active', { timeout: 8000 });
+  await page.waitForFunction(() => document.getElementById('buyer-message').textContent.indexOf('Account created') !== -1, { timeout: 8000 });
   check('registration via UI succeeds', true);
 
   step('new buyer can log in');
-  await setValue('#login-email', newEmail);
-  await setValue('#login-password', 'smokepass123');
-  await click('#login-submit');
+  await setValue('#buyer-email', newEmail);
+  await setValue('#buyer-password', 'smokepass123');
+  await click('#buyer-submit');
   await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/market') === 0, { timeout: 8000 });
   check('new registered buyer can log in', true);
   await logout();
@@ -577,8 +580,8 @@ main().catch((err) => {
       global.page
         .evaluate(() => {
           const t = document.querySelector('#toast-root .toast');
-          const m = document.querySelector('#login-message');
-          return 'toast: ' + (t ? t.textContent : '(none)') + ' | login-message: ' + (m ? m.textContent : '(none)');
+          const m = document.querySelector('#farmer-message');
+          return 'toast: ' + (t ? t.textContent : '(none)') + ' | farmer-message: ' + (m ? m.textContent : '(none)');
         })
         .then((s) => console.error('URL: ' + global.page.url() + ' | ' + s));
     } catch (e) {}

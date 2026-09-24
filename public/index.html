@@ -18,25 +18,41 @@
       </header>
 
       <div class="tab-bar" role="tablist" aria-label="Authentication">
-        <button type="button" class="tab tab-login active" role="tab" aria-selected="true" data-tab="login">Buyer / Farmer</button>
-        <button type="button" class="tab tab-register" role="tab" aria-selected="false" data-tab="register">Sign Up</button>
+        <button type="button" class="tab tab-farmer active" role="tab" aria-selected="true" data-tab="farmer">Farmer</button>
+        <button type="button" class="tab tab-buyer" role="tab" aria-selected="false" data-tab="buyer">Buyer</button>
         <button type="button" class="tab tab-admin" role="tab" aria-selected="false" data-tab="admin">Admin</button>
       </div>
 
-      <form id="login-form" class="auth-form active" novalidate>
-        <p class="auth-form-title">Buyer / Farmer Login</p>
+      <form id="farmer-login-form" class="auth-form active" novalidate>
+        <p class="auth-form-title">Farmer Login</p>
         <div class="field">
-          <label for="login-email">Email</label>
-          <input type="email" id="login-email" name="email" autocomplete="email" placeholder="user@example.com" required />
-          <p class="field-error" id="login-email-error"></p>
+          <label for="farmer-email">Email</label>
+          <input type="email" id="farmer-email" name="email" autocomplete="email" placeholder="farmer@deepimart.com" required />
+          <p class="field-error" id="farmer-email-error"></p>
         </div>
         <div class="field">
-          <label for="login-password">Password</label>
-          <input type="password" id="login-password" name="password" autocomplete="current-password" placeholder="Enter your password" required />
-          <p class="field-error" id="login-password-error"></p>
+          <label for="farmer-password">Password</label>
+          <input type="password" id="farmer-password" name="password" autocomplete="current-password" placeholder="Enter your password" required />
+          <p class="field-error" id="farmer-password-error"></p>
         </div>
-        <p class="form-message" id="login-message" role="status"></p>
-        <button type="submit" class="btn-primary" id="login-submit">Login</button>
+        <p class="form-message" id="farmer-message" role="status"></p>
+        <button type="submit" class="btn-primary" id="farmer-submit">Login</button>
+      </form>
+
+      <form id="buyer-login-form" class="auth-form" novalidate>
+        <p class="auth-form-title">Buyer Login</p>
+        <div class="field">
+          <label for="buyer-email">Email</label>
+          <input type="email" id="buyer-email" name="email" autocomplete="email" placeholder="buyer@deepimart.com" required />
+          <p class="field-error" id="buyer-email-error"></p>
+        </div>
+        <div class="field">
+          <label for="buyer-password">Password</label>
+          <input type="password" id="buyer-password" name="password" autocomplete="current-password" placeholder="Enter your password" required />
+          <p class="field-error" id="buyer-password-error"></p>
+        </div>
+        <p class="form-message" id="buyer-message" role="status"></p>
+        <button type="submit" class="btn-primary" id="buyer-submit">Login</button>
       </form>
 
       <form id="register-form" class="auth-form" novalidate>
@@ -119,6 +135,11 @@
         <p class="form-message" id="admin-message" role="status"></p>
         <button type="submit" class="btn-primary" id="admin-login-submit">Login</button>
       </form>
+
+      <p class="auth-switch">
+        <span id="auth-switch-label">New to DeepiMart?</span>
+        <button type="button" class="auth-switch-link" id="auth-switch-btn" data-mode="register">Create an Account</button>
+      </p>
     </section>
 
     <p class="auth-note">

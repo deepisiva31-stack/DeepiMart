@@ -6,12 +6,14 @@
   var INVALID_EMAIL = 'Please enter a valid email address.';
 
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
-  var loginForm = document.getElementById('login-form');
-  var registerForm = document.getElementById('register-form');
+  var farmerForm = document.getElementById('farmer-login-form');
+  var buyerForm = document.getElementById('buyer-login-form');
   var adminLoginForm = document.getElementById('admin-login-form');
-  var loginMessage = document.getElementById('login-message');
-  var registerMessage = document.getElementById('register-message');
+  var registerForm = document.getElementById('register-form');
   var adminMessage = document.getElementById('admin-message');
+  var registerMessage = document.getElementById('register-message');
+  var authSwitchBtn = document.getElementById('auth-switch-btn');
+  var authSwitchLabel = document.getElementById('auth-switch-label');
 
   function setMessage(el, type, text) {
     el.className = 'form-message ' + type;
@@ -35,18 +37,32 @@
     return typeof value === 'string' && value.trim().length > 0 && value.length <= 254 && EMAIL_REGEX.test(value.trim());
   }
 
+  function clearAllMessages() {
+    clearMessage(document.getElementById('farmer-message'));
+    clearMessage(document.getElementById('buyer-message'));
+    clearMessage(adminMessage);
+    clearMessage(registerMessage);
+  }
+
+  function refreshSwitch(tabName) {
+    var register = tabName === 'register';
+    authSwitchLabel.textContent = register ? 'Already have an account?' : 'New to DeepiMart?';
+    authSwitchBtn.textContent = register ? 'Back to Login' : 'Create an Account';
+    authSwitchBtn.setAttribute('data-mode', register ? 'login' : 'register');
+  }
+
   function switchTab(tabName) {
     tabs.forEach(function (tab) {
       var active = tab.getAttribute('data-tab') === tabName;
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-selected', active ? 'true' : 'false');
     });
-    loginForm.classList.toggle('active', tabName === 'login');
-    registerForm.classList.toggle('active', tabName === 'register');
+    farmerForm.classList.toggle('active', tabName === 'farmer');
+    buyerForm.classList.toggle('active', tabName === 'buyer');
     adminLoginForm.classList.toggle('active', tabName === 'admin');
-    clearMessage(loginMessage);
-    clearMessage(registerMessage);
-    clearMessage(adminMessage);
+    registerForm.classList.toggle('active', tabName === 'register');
+    clearAllMessages();
+    refreshSwitch(tabName);
   }
 
   function homeFor(role) {
@@ -59,6 +75,67 @@
     setMessage(messageEl, 'error', (err && err.message) || 'Something went wrong.');
   }
 
+  function goApp(data, home) {
+    DM.storeSession(data.token, data.user);
+    DM.toast('Welcome back, ' + data.user.name + '!', 'success');
+    DM.App.showApp(data.user);
+    if ((location.hash || '').replace(/^#/, '') === home.replace(/^#/, '')) {
+      DM.App.renderRoute();
+    } else {
+      window.location.hash = home;
+    }
+  }
+
+  // Farmer and Buyer login both use the regular account login endpoint.
+  function bindLogin(formId, msgId) {
+    var form = document.getElementById(formId);
+    var messageEl = document.getElementById(msgId);
+    var prefix = formId.replace('-login-form', '');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      clearMessage(messageEl);
+
+      var emailInput = document.getElementById(prefix + '-email');
+      var passwordInput = document.getElementById(prefix + '-password');
+      var emailError = document.getElementById(prefix + '-email-error');
+      var passwordError = document.getElementById(prefix + '-password-error');
+      var email = emailInput.value.trim();
+      var valid = true;
+
+      if (!email) {
+        setFieldError(emailInput, emailError, 'Please enter your email address.');
+        valid = false;
+      } else if (!isValidEmail(email)) {
+        setFieldError(emailInput, emailError, INVALID_EMAIL);
+        valid = false;
+      } else {
+        setFieldError(emailInput, emailError, '');
+      }
+      if (!passwordInput.value) {
+        setFieldError(passwordInput, passwordError, 'Please enter your password.');
+        valid = false;
+      } else {
+        setFieldError(passwordInput, passwordError, '');
+      }
+      if (!valid) return;
+
+      var submit = document.getElementById(prefix + '-submit');
+      submit.disabled = true;
+      setMessage(messageEl, '', 'Logging in...');
+
+      DM.api('POST', '/api/auth/login', { email: email, password: passwordInput.value })
+        .then(function (data) {
+          goApp(data, homeFor(data.user.role));
+        })
+        .catch(function (err) {
+          setMessage(messageEl, 'error', err.message || 'Invalid email or password.');
+        })
+        .finally(function () {
+          submit.disabled = false;
+        });
+    });
+  }
+
   function init() {
     tabs.forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -66,7 +143,15 @@
       });
     });
 
-    ['login-email', 'reg-email', 'admin-email'].forEach(function (id) {
+    authSwitchBtn.addEventListener('click', function () {
+      if (authSwitchBtn.getAttribute('data-mode') === 'register') {
+        switchTab('register');
+      } else {
+        switchTab('farmer');
+      }
+    });
+
+    ['farmer-email', 'buyer-email', 'admin-email', 'reg-email'].forEach(function (id) {
       var input = document.getElementById(id);
       input.addEventListener('input', function () {
         var errorEl = document.getElementById(id + '-error');
@@ -93,58 +178,8 @@
       });
     });
 
-    // ---------- Buyer / Farmer login ----------
-    loginForm.addEventListener('submit', function (event) {
-      event.preventDefault();
-      clearMessage(loginMessage);
-
-      var emailInput = document.getElementById('login-email');
-      var passwordInput = document.getElementById('login-password');
-      var emailError = document.getElementById('login-email-error');
-      var passwordError = document.getElementById('login-password-error');
-      var email = emailInput.value.trim();
-      var valid = true;
-
-      if (!email) {
-        setFieldError(emailInput, emailError, 'Please enter your email address.');
-        valid = false;
-      } else if (!isValidEmail(email)) {
-        setFieldError(emailInput, emailError, INVALID_EMAIL);
-        valid = false;
-      } else {
-        setFieldError(emailInput, emailError, '');
-      }
-      if (!passwordInput.value) {
-        setFieldError(passwordInput, passwordError, 'Please enter your password.');
-        valid = false;
-      } else {
-        setFieldError(passwordInput, passwordError, '');
-      }
-      if (!valid) return;
-
-      var submit = document.getElementById('login-submit');
-      submit.disabled = true;
-      setMessage(loginMessage, '', 'Logging in...');
-
-      DM.api('POST', '/api/auth/login', { email: email, password: passwordInput.value })
-        .then(function (data) {
-          DM.storeSession(data.token, data.user);
-          DM.toast('Welcome back, ' + data.user.name + '!', 'success');
-          DM.App.showApp(data.user);
-          var home = homeFor(data.user.role);
-          if ((location.hash || '').replace(/^#/, '') === home.replace(/^#/, '')) {
-            DM.App.renderRoute();
-          } else {
-            window.location.hash = home;
-          }
-        })
-        .catch(function (err) {
-          setMessage(loginMessage, 'error', err.message || 'Invalid email or password.');
-        })
-        .finally(function () {
-          submit.disabled = false;
-        });
-    });
+    bindLogin('farmer-login-form', 'farmer-message');
+    bindLogin('buyer-login-form', 'buyer-message');
 
     // ---------- Admin login ----------
     adminLoginForm.addEventListener('submit', function (event) {
@@ -179,18 +214,10 @@
       DM.api('POST', '/api/auth/admin/login', { email: email, password: passwordInput.value })
         .then(function (data) {
           if (data.user.role !== 'admin') {
-            setMessage(adminMessage, 'error', 'This account is not an admin. Use the Buyer / Farmer login instead.');
+            setMessage(adminMessage, 'error', 'This account is not an admin. Use the Farmer or Buyer tab instead.');
             return;
           }
-          DM.storeSession(data.token, data.user);
-          DM.toast('Welcome back, ' + data.user.name + '!', 'success');
-          DM.App.showApp(data.user);
-          var home = '#/admin/overview';
-          if ((location.hash || '').replace(/^#/, '') === home.replace(/^#/, '')) {
-            DM.App.renderRoute();
-          } else {
-            window.location.hash = home;
-          }
+          goApp(data, '#/admin/overview');
         })
         .catch(function (err) {
           setMessage(adminMessage, 'error', err.message || 'Invalid admin credentials.');
@@ -272,10 +299,12 @@
         location: document.getElementById('reg-location').value.trim(),
       })
         .then(function (data) {
+          var role = data.user && data.user.role === 'farmer' ? 'farmer' : 'buyer';
           setMessage(registerMessage, 'success', 'Account created for ' + data.user.email + ' as ' + data.user.role + '. You can now log in.');
           setTimeout(function () {
-            switchTab('login');
-            setMessage(loginMessage, 'success', 'Account created for ' + data.user.email + '. You can now log in.');
+            switchTab(role);
+            var targetMsg = document.getElementById(role + '-message');
+            setMessage(targetMsg, 'success', 'Account created for ' + data.user.email + '. You can now log in.');
             registerForm.reset();
           }, 1200);
         })

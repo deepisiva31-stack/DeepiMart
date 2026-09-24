@@ -115,27 +115,31 @@ a {
 
 .tab-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: var(--soil-100);
-  border-radius: 10px;
-  padding: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   margin-bottom: 22px;
 }
 
 .tab {
-  border: none;
-  background: transparent;
+  border: 1.5px solid var(--soil-300);
+  background: var(--white);
   padding: 10px 0;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--soil-500);
+  color: var(--soil-600);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab:hover:not(.active) {
+  border-color: var(--green-500);
+  color: var(--green-800);
 }
 
 .tab.active {
   background: var(--green-600);
+  border-color: var(--green-600);
   color: var(--white);
 }
 
@@ -154,6 +158,28 @@ a {
   letter-spacing: 0.06em;
   color: var(--soil-500);
   margin: 0 0 16px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--soil-600);
+}
+
+.auth-switch .auth-switch-link {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green-700);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.auth-switch .auth-switch-link:hover {
+  color: var(--green-600);
 }
 
 .otp-row {
