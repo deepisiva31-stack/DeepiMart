@@ -298,6 +298,8 @@
             DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Harvest date' }), DM.el('span', { text: p.harvestDate || '-' })]),
             DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Freshness' }), DM.el('span', null, [freshnessBadge(p), DM.el('span', { text: p.freshness ? ' - ' + p.freshness : '' })])]),
             DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Farm location' }), DM.el('span', { text: p.location || '-' })]),
+            DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Product ID' }), DM.el('span', { text: '#' + p.id })]),
+            DM.el('div', { class: 'info-item' }, [DM.el('span', { class: 'info-label', text: 'Listed on' }), DM.el('span', { text: DM.formatDate(p.createdAt) })]),
           ]),
           DM.el('div', { class: 'qty-row' }, [DM.el('label', { text: 'Quantity (' + p.unit + ')' }), qtyInput]),
           DM.el('div', { class: 'btn-row' }, [addBtn, wishBtn, msgBtn]),

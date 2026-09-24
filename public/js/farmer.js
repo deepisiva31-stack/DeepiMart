@@ -215,7 +215,7 @@
   function renderProductTable(products) {
     var table = DM.el('table', { class: 'data-table' }, [
       DM.el('thead', null, [
-        DM.el('tr', null, ['Product', 'Category', 'Price', 'Stock', 'Harvest', 'Status', 'Actions'].map(function (h) {
+        DM.el('tr', null, ['Product', 'ID', 'Category', 'Price', 'Stock', 'Harvest', 'Listed', 'Status', 'Actions'].map(function (h) {
           return DM.el('th', { text: h });
         })),
       ]),
@@ -230,10 +230,12 @@
             DM.el('span', { class: 'td-strong', text: p.name }),
           ]),
         ]),
+        DM.el('td', { class: 'td-code', text: '#' + p.id }),
         DM.el('td', { text: p.category.name }),
         DM.el('td', { text: DM.money(p.price) + '/' + p.unit }),
         DM.el('td', { text: p.quantity }),
         DM.el('td', { text: p.harvestDate || '-' }),
+        DM.el('td', { text: DM.formatDate(p.createdAt) }),
         DM.el('td', null, [DM.statusBadge(p.status, statusMap[p.status])]),
         DM.el('td', { class: 'actions-cell' }, [
           DM.el('button', { class: 'btn-small', text: 'Stock' }),
