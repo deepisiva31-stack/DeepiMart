@@ -9,11 +9,9 @@
   var loginForm = document.getElementById('login-form');
   var registerForm = document.getElementById('register-form');
   var adminLoginForm = document.getElementById('admin-login-form');
-  var adminCreateForm = document.getElementById('admin-create-form');
   var loginMessage = document.getElementById('login-message');
   var registerMessage = document.getElementById('register-message');
   var adminMessage = document.getElementById('admin-message');
-  var adminCreateMessage = document.getElementById('admin-create-message');
 
   function setMessage(el, type, text) {
     el.className = 'form-message ' + type;
@@ -37,16 +35,6 @@
     return typeof value === 'string' && value.trim().length > 0 && value.length <= 254 && EMAIL_REGEX.test(value.trim());
   }
 
-  function showAdminPane(which) {
-    if (which === 'create') {
-      adminLoginForm.classList.remove('active');
-      adminCreateForm.classList.add('active');
-    } else {
-      adminCreateForm.classList.remove('active');
-      adminLoginForm.classList.add('active');
-    }
-  }
-
   function switchTab(tabName) {
     tabs.forEach(function (tab) {
       var active = tab.getAttribute('data-tab') === tabName;
@@ -56,11 +44,9 @@
     loginForm.classList.toggle('active', tabName === 'login');
     registerForm.classList.toggle('active', tabName === 'register');
     adminLoginForm.classList.toggle('active', tabName === 'admin');
-    adminCreateForm.classList.remove('active');
     clearMessage(loginMessage);
     clearMessage(registerMessage);
     clearMessage(adminMessage);
-    clearMessage(adminCreateMessage);
   }
 
   function homeFor(role) {
@@ -80,7 +66,7 @@
       });
     });
 
-    ['login-email', 'reg-email', 'admin-email', 'admin-new-email'].forEach(function (id) {
+    ['login-email', 'reg-email', 'admin-email'].forEach(function (id) {
       var input = document.getElementById(id);
       input.addEventListener('input', function () {
         var errorEl = document.getElementById(id + '-error');
@@ -92,9 +78,9 @@
       });
     });
 
-    ['reg-password', 'reg-confirm-password', 'admin-new-password', 'admin-new-confirm'].forEach(function (id) {
+    ['reg-password', 'reg-confirm-password'].forEach(function (id) {
       var input = document.getElementById(id);
-      var matchId = id.indexOf('confirm') !== -1 ? (id.indexOf('admin') !== -1 ? 'admin-new-password' : 'reg-password') : null;
+      var matchId = id === 'reg-confirm-password' ? 'reg-password' : null;
       input.addEventListener('input', function () {
         var errorEl = document.getElementById(id + '-error');
         if (input.value && input.value.length < 6) {
@@ -208,91 +194,6 @@
         })
         .catch(function (err) {
           setMessage(adminMessage, 'error', err.message || 'Invalid admin credentials.');
-        })
-        .finally(function () {
-          submit.disabled = false;
-        });
-    });
-
-    // ---------- Create New Admin ----------
-    document.getElementById('admin-create-toggle').addEventListener('click', function () {
-      clearMessage(adminMessage);
-      clearMessage(adminCreateMessage);
-      showAdminPane('create');
-    });
-    document.getElementById('admin-back-login').addEventListener('click', function () {
-      clearMessage(adminMessage);
-      clearMessage(adminCreateMessage);
-      showAdminPane('login');
-    });
-
-    adminCreateForm.addEventListener('submit', function (event) {
-      event.preventDefault();
-      clearMessage(adminCreateMessage);
-
-      var fields = {
-        name: document.getElementById('admin-new-name'),
-        email: document.getElementById('admin-new-email'),
-        password: document.getElementById('admin-new-password'),
-        confirm: document.getElementById('admin-new-confirm'),
-      };
-      var errors = {
-        name: document.getElementById('admin-new-name-error'),
-        email: document.getElementById('admin-new-email-error'),
-        password: document.getElementById('admin-new-password-error'),
-        confirm: document.getElementById('admin-new-confirm-error'),
-      };
-      var valid = true;
-
-      if (!fields.name.value.trim()) {
-        setFieldError(fields.name, errors.name, 'Please enter your name.');
-        valid = false;
-      } else {
-        setFieldError(fields.name, errors.name, '');
-      }
-      if (!isValidEmail(fields.email.value)) {
-        setFieldError(fields.email, errors.email, fields.email.value.trim() ? INVALID_EMAIL : 'Please enter an email address.');
-        valid = false;
-      } else {
-        setFieldError(fields.email, errors.email, '');
-      }
-      if (!fields.password.value || fields.password.value.length < 6) {
-        setFieldError(fields.password, errors.password, 'Password must be at least 6 characters long.');
-        valid = false;
-      } else {
-        setFieldError(fields.password, errors.password, '');
-      }
-      if (fields.confirm.value !== fields.password.value) {
-        setFieldError(fields.confirm, errors.confirm, 'Passwords do not match.');
-        valid = false;
-      } else {
-        setFieldError(fields.confirm, errors.confirm, '');
-      }
-      if (!valid) return;
-
-      var submit = document.getElementById('admin-create-submit');
-      submit.disabled = true;
-      setMessage(adminCreateMessage, '', 'Creating admin account...');
-
-      DM.api('POST', '/api/auth/admin/setup', {
-        name: fields.name.value.trim(),
-        email: fields.email.value.trim(),
-        password: fields.password.value,
-      })
-        .then(function (data) {
-          setMessage(adminCreateMessage, 'success', data.message || 'Admin account created. You can now log in.');
-          var createdEmail = fields.email.value.trim();
-          setTimeout(function () {
-            showAdminPane('login');
-            document.getElementById('admin-email').value = createdEmail;
-            document.getElementById('admin-password').value = '';
-            clearMessage(adminMessage);
-            setMessage(adminMessage, 'success', 'Admin account created. Log in with your new credentials.');
-            adminCreateForm.reset();
-          }, 1200);
-        })
-        .catch(function (err) {
-          setMessage(adminCreateMessage, 'error', err.message || 'Could not create admin account.');
         })
         .finally(function () {
           submit.disabled = false;

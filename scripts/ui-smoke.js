@@ -85,7 +85,10 @@ async function main() {
     if (m.type() === 'log') process.stdout.write('[page] ' + m.text() + '\n');
   });
   page.on('response', (r) => {
-    if (r.status() >= 400 && /\/api\//.test(r.url())) errors.push({ kind: 'http', status: r.status(), path: r.url().replace(base, ''), step: lastStep });
+    if (r.status() >= 400 && /\/api\//.test(r.url())) {
+      if (r.status() === 401 && /\/api\/auth\/admin\/login/.test(r.url())) return; // expected: strict admin login rejects wrong credentials
+      errors.push({ kind: 'http', status: r.status(), path: r.url().replace(base, ''), step: lastStep });
+    }
   });
 
   const base = 'http://localhost:' + PORT;
@@ -498,7 +501,7 @@ async function main() {
   check('new registered buyer can log in', true);
   await logout();
 
-  // ===== Admin tab + Create New Admin (UI) =====
+  // ===== Admin tab (single admin, strict credentials) =====
   step('admin tab shows admin login');
   await goto('#/login');
   await page.waitForSelector('#auth-view:not(.hidden)');
@@ -506,38 +509,27 @@ async function main() {
   await page.waitForSelector('#admin-login-form.active');
   check('admin tab shows admin login form', true);
 
-  step('demo admin login bypasses credentials');
-  await setValue('#admin-email', 'demo@deepimart.com');
-  await setValue('#admin-password', 'anything-works');
+  step('wrong admin credentials rejected');
+  await setValue('#admin-email', 'admin@deepimart.com');
+  await setValue('#admin-password', 'wrong-password');
   await click('#admin-login-submit');
-  await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
-  await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
-  check('demo admin login opens Admin Dashboard', true);
-  await logout();
+  await page.waitForFunction(() => (document.getElementById('admin-message').textContent || '').indexOf('Invalid admin email or password') !== -1, { timeout: 8000 });
+  check('wrong admin email/password shows error and stays on login', true);
+  const stillOnLogin = await page.evaluate(() => window.location.hash);
+  check('failed admin login does not enter dashboard', (stillOnLogin || '').indexOf('#/admin') === -1);
 
-  step('create new admin via UI');
-  await goto('#/login');
-  await page.waitForSelector('#auth-view:not(.hidden)');
-  await click('.tab-admin');
-  await page.waitForSelector('#admin-login-form.active');
-  await click('#admin-create-toggle');
-  await page.waitForSelector('#admin-create-form.active');
-  check('admin create form has no setup code field', !(await page.$('#admin-setup-code')));
-  const newAdminEmail = 'uiscreenadmin' + Date.now() + '@example.com';
-  await setValue('#admin-new-name', 'UI Screen Admin');
-  await setValue('#admin-new-email', newAdminEmail);
-  await setValue('#admin-new-password', 'adminpass123');
-  await setValue('#admin-new-confirm', 'adminpass123');
-  await click('#admin-create-submit');
-  await page.waitForFunction(() => document.getElementById('admin-create-message').textContent.indexOf('created') !== -1, { timeout: 10000 });
-  check('Create New Admin succeeds (UI) without setup code', true);
-  await page.waitForSelector('#admin-login-form.active', { timeout: 10000 });
-  await setValue('#admin-email', newAdminEmail);
-  await setValue('#admin-password', 'adminpass123');
+  step('admin login with correct credentials');
+  await setValue('#admin-email', 'admin@deepimart.com');
+  await setValue('#admin-password', 'admin123');
   await click('#admin-login-submit');
   await page.waitForFunction(() => window.location.hash.indexOf('#/admin/overview') === 0, { timeout: 8000 });
   await page.waitForSelector('#view .stats-grid', { timeout: 8000 });
-  check('created admin can log in via Admin tab', true);
+  check('correct admin credentials open Admin Dashboard', true);
+
+  step('no create-new-admin self-service flow');
+  const hasCreateToggle = await page.$('#admin-create-toggle');
+  const hasCreateForm = await page.$('#admin-create-form');
+  check('Create New Admin flow removed from UI', !hasCreateToggle && !hasCreateForm);
   await logout();
 
   // ===== Mobile responsiveness =====

@@ -11,6 +11,15 @@ function insertUser(name, email, password, role, phone, location, bio) {
   return result.lastInsertRowid;
 }
 
+// Provisions the single admin account exactly once. Idempotent: if an admin
+// already exists the existing row is returned unchanged — credentials are
+// NEVER reset, overwritten, or recreated on subsequent startups.
+function ensureAdmin() {
+  const existing = db.prepare("SELECT id FROM users WHERE email = 'admin@deepimart.com' AND role = 'admin'").get();
+  if (existing) return existing.id;
+  return insertUser('DeepiMart Admin', 'admin@deepimart.com', 'admin123', 'admin', '+256700000001', 'Kampala, Uganda', 'Marketplace administrator.');
+}
+
 function ensureCategory(name, slug) {
   const existing = db.prepare('SELECT id FROM categories WHERE slug = ?').get(slug);
   if (existing) return existing.id;
@@ -41,7 +50,7 @@ function seed() {
   cat.meat = ensureCategory('Poultry & Meat', 'poultry-meat');
   cat.tubers = ensureCategory('Tubers & Roots', 'tubers-roots');
 
-  const admin = insertUser('DeepiMart Admin', 'admin@deepimart.com', 'admin123', 'admin', '+256700000001', 'Kampala, Uganda', 'Marketplace administrator.');
+  const admin = ensureAdmin();
   const farmer = insertUser(
     'Grace Nakato',
     'farmer@deepimart.com',
@@ -112,4 +121,4 @@ function seed() {
   console.log('Seed data ready (demo accounts: admin@deepimart.com, farmer@deepimart.com, buyer@deepimart.com).');
 }
 
-module.exports = { seed };
+module.exports = { seed, ensureAdmin };

@@ -1,6 +1,5 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const crypto = require('node:crypto');
 const db = require('./db');
 const { toPublicUser, createSession, destroySession, requireAuth } = require('./session');
 
@@ -9,37 +8,10 @@ const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const ALLOWED_ROLES = new Set(['farmer', 'buyer']);
 
-// Demo / development mode. When enabled the "Create New Admin" flow no longer
-// requires the ADMIN_SETUP_CODE and the Admin login accepts any email/password
-// so demo users always reach the Admin Dashboard. Set DEMO_MODE=true explicitly
-// (or leave it unset outside production). In production (NODE_ENV=production and
-// DEMO_MODE not enabled) full credential + setup-code validation is enforced.
-const DEMO_MODE =
-  process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1' || process.env.NODE_ENV !== 'production';
-
-// In-memory per-IP limiter for the protected admin-setup endpoint (single
-// server instance; brute-force protection for the ADMIN_SETUP_CODE).
-const setupAttempts = new Map();
-const SETUP_LIMIT = 20;
-const SETUP_WINDOW_MS = 15 * 60 * 1000;
-
-function clientIp(req) {
-  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim().slice(0, 64);
-}
-
-function setupRateLimited(ip) {
-  const now = Date.now();
-  const rec = (setupAttempts.get(ip) || []).filter((t) => now - t < SETUP_WINDOW_MS);
-  setupAttempts.set(ip, rec);
-  return rec.length >= SETUP_LIMIT;
-}
-
-function recordSetupAttempt(ip) {
-  const now = Date.now();
-  const rec = (setupAttempts.get(ip) || []).filter((t) => now - t < SETUP_WINDOW_MS);
-  rec.push(now);
-  setupAttempts.set(ip, rec);
-}
+// The admin account is created exactly once by the idempotent seed
+// (admin@deepimart.com / admin123). Admin login always validates the stored
+// bcrypt password — there is no demo/any-credentials bypass. Credentials are
+// never recreated, reset, or overwritten on restart.
 
 function sanitizeString(value, maxLength) {
   if (typeof value !== 'string') return '';
@@ -105,73 +77,10 @@ router.post('/register', (req, res) => {
   }
 });
 
-// Protected, env-gated admin self-service account creation (forgotten admin
-// access recovery). In production it validates ADMIN_SETUP_CODE on the server
-// (never exposed to the browser); in demo mode the code is not required.
-// Existing accounts are never modified.
-function insertAdmin(name, email, passwordHash) {
-  return db
-    .prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')")
-    .run(name, email, passwordHash);
-}
-
-router.post('/admin/setup', (req, res) => {
-  try {
-    const ip = clientIp(req);
-    const setupCode = typeof (req.body && req.body.setupCode) === 'string' ? req.body.setupCode : '';
-
-    if (!DEMO_MODE) {
-      const expected = process.env.ADMIN_SETUP_CODE;
-      if (!expected || !String(expected).trim()) {
-        return res.status(503).json({ error: 'Admin setup is not enabled on this server.' });
-      }
-      if (setupRateLimited(ip)) {
-        return res.status(429).json({ error: 'Too many attempts. Try again later.' });
-      }
-      const a = Buffer.from(String(expected).trim());
-      const b = Buffer.from(String(setupCode).trim());
-      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-        recordSetupAttempt(ip);
-        return res.status(403).json({ error: 'Invalid Admin Setup Code.' });
-      }
-    }
-
-    const name = sanitizeString(req.body && req.body.name, 100);
-    const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
-    const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
-
-    const fail = (status, message) => {
-      if (!DEMO_MODE) recordSetupAttempt(ip);
-      return res.status(status).json({ error: message });
-    };
-
-    if (!name) return fail(400, 'Please enter your name.');
-    if (!validateEmail(email)) return fail(400, 'Please enter a valid email address.');
-    if (password.length < 6) return fail(400, 'Password must be at least 6 characters long.');
-
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existing) return fail(409, 'Email already exists.');
-
-    const passwordHash = bcrypt.hashSync(password, 12);
-    const result = insertAdmin(name, email, passwordHash);
-
-    return res.status(201).json({
-      message: 'Admin account created. You can now log in.',
-      admin: { id: result.lastInsertRowid, name, email, role: 'admin' },
-    });
-  } catch (err) {
-    if (String(err && err.message).includes('UNIQUE')) {
-      return res.status(409).json({ error: 'Email already exists.' });
-    }
-    console.error('Admin setup error:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// Admin login. Demo mode lets any email/password through to the Admin
-// Dashboard (existing admin identity is kept when the email matches, otherwise
-// a seeded/available admin is used as the demo account). Production mode keeps
-// full credential validation.
+// Admin login. Always validates the stored email + bcrypt password hash
+// against the single admin account created by the seed. There is deliberately
+// NO demo/any-credentials bypass: wrong credentials always fail with
+// "Invalid admin email or password.".
 router.post('/admin/login', (req, res) => {
   try {
     const email = sanitizeString(req.body && req.body.email, 254).toLowerCase();
@@ -183,23 +92,8 @@ router.post('/admin/login', (req, res) => {
 
     const row = db.prepare("SELECT * FROM users WHERE email = ? AND role = 'admin'").get(email);
 
-    if (DEMO_MODE) {
-      let admin = row;
-      if (!admin) {
-        admin =
-          db.prepare("SELECT * FROM users WHERE role = 'admin' AND email = ?").get('admin@deepimart.com') ||
-          db.prepare("SELECT * FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get();
-      }
-      if (!admin) {
-        return res.status(503).json({ error: 'No admin account exists. Create one with "Create New Admin".' });
-      }
-      const token = createSession(admin.id);
-      return res.status(200).json({ message: 'Login successful.', token, user: toPublicUser(admin) });
-    }
-
-    if (!row) return res.status(401).json({ error: 'Invalid email or password.' });
-    if (!bcrypt.compareSync(password, row.password_hash)) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+    if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+      return res.status(401).json({ error: 'Invalid admin email or password.' });
     }
     if (row.status !== 'active') {
       return res.status(403).json({ error: 'Your account has been disabled.' });

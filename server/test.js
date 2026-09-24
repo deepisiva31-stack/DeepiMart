@@ -1,7 +1,6 @@
 process.env.DB_PATH = './data/test.db';
 process.env.PORT = '3999';
 process.env.DISABLE_SEED = '1';
-process.env.ADMIN_SETUP_CODE = 'test-admin-setup-123'; // only enforced when DEMO_MODE is off (production)
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -506,48 +505,59 @@ async function main() {
   const newLogin = await post('/api/auth/login', { email: 'kofi@example.com', password: 'newpass456' });
   check('new password works', newLogin.status === 200 && newLogin.json.user.email === 'kofi@example.com');
 
-  // --- Admin self-service account creation (Create New Admin) ---
-  // Demo mode: no Admin Setup Code is required (an incoming code is ignored).
-  const setupMissing = await post('/api/auth/admin/setup', { name: 'Manager Zero', email: 'manager0@example.com', password: 'secret123' });
-  check('admin setup without code creates admin', setupMissing.status === 201);
-  const setupWrong = await post('/api/auth/admin/setup', { name: 'Manager One B', email: 'manager1b@example.com', password: 'secret123', setupCode: 'totally-wrong' });
-  check('setup code ignored in demo mode', setupWrong.status === 201);
-  const setupBadEmail = await post('/api/auth/admin/setup', { name: 'A2', email: 'not-an-email', password: 'secret123' });
-  check('admin setup rejects invalid email', setupBadEmail.status === 400);
-  const setupNoName = await post('/api/auth/admin/setup', { email: 'm3@example.com', password: 'secret123' });
-  check('admin setup requires name', setupNoName.status === 400 && setupNoName.json.error === 'Please enter your name.');
-  const setupShort = await post('/api/auth/admin/setup', { name: 'A4', email: 'm4@example.com', password: 'x' });
-  check('admin setup rejects short password', setupShort.status === 400);
-  const setupOk1 = await post('/api/auth/admin/setup', { name: 'Manager One', email: 'manager1@example.com', password: 'secret123' });
-  check('admin setup creates admin account', setupOk1.status === 201 && setupOk1.json.admin.role === 'admin');
-  const setupDup = await post('/api/auth/admin/setup', { name: 'Mgr', email: 'manager1@example.com', password: 'secret123' });
-  check('admin setup rejects existing email', setupDup.status === 409 && setupDup.json.error === 'Email already exists.');
-  const setupOk2 = await post('/api/auth/admin/setup', { name: 'Manager Two', email: 'manager2@example.com', password: 'secret123' });
-  check('multiple admin accounts can be created', setupOk2.status === 201);
+  // --- Admin authentication (single admin, strict credentials) ---
+  // Exactly one admin account is configured. Credentials are stored as a bcrypt
+  // hash and validated on every login; the same email/password always works.
+  const adminSearch = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get();
+  check('exactly one admin account exists', adminSearch.n === 1);
 
-  // --- Admin login (demo mode: any email/password signs in to the dashboard) ---
-  const demoLoginMatch = await post('/api/auth/admin/login', { email: 'root@example.com', password: 'definitely-wrong' });
-  check('demo admin login accepts wrong password', demoLoginMatch.status === 200 && demoLoginMatch.json.user.role === 'admin' && demoLoginMatch.json.user.email === 'root@example.com');
-  const demoLoginUnknown = await post('/api/auth/admin/login', { email: 'whoever@example.com', password: 'whatever' });
-  check('demo admin login accepts unknown email', demoLoginUnknown.status === 200 && demoLoginUnknown.json.user.role === 'admin');
-  const demoTok = demoLoginUnknown.json.token;
-  const demoAdminUsers = await get('/api/admin/users', demoTok);
-  check('demo admin login reaches admin API', demoAdminUsers.status === 200 && Array.isArray(demoAdminUsers.json.users));
-  const demoLoginEmpty = await post('/api/auth/admin/login', { email: '', password: '' });
-  check('admin login requires email and password', demoLoginEmpty.status === 400);
+  // Login with the same credentials works every time.
+  const adminLogin1 = await post('/api/auth/admin/login', { email: 'root@example.com', password: 'admin123' });
+  check('admin login correct credentials returns 200', adminLogin1.status === 200);
+  check('admin login returns admin role', adminLogin1.json.user.role === 'admin');
+  const adminLogin2 = await post('/api/auth/admin/login', { email: 'root@example.com', password: 'admin123' });
+  check('same admin credentials work on repeated login', adminLogin2.status === 200);
+  check('repeated admin login returns fresh token', adminLogin2.json.token && adminLogin2.json.token !== adminLogin1.json.token);
 
-  const mgr1Login = await post('/api/auth/login', { email: 'manager1@example.com', password: 'secret123' });
-  check('created admin can log in', mgr1Login.status === 200 && mgr1Login.json.user.role === 'admin');
-  const mgr1Tok = mgr1Login.json.token;
-  const mgrAdmin = await get('/api/admin/users', mgr1Tok);
-  check('created admin has admin access', mgrAdmin.status === 200 && Array.isArray(mgrAdmin.json.users));
+  // Logout then log in again with the same credentials.
+  await post('/api/auth/logout', {}, adminLogin1.json.token);
+  const adminLogin3 = await post('/api/auth/admin/login', { email: 'root@example.com', password: 'admin123' });
+  check('admin logs in again after logout', adminLogin3.status === 200);
+
+  // Wrong password must be rejected.
+  const adminWrong = await post('/api/auth/admin/login', { email: 'root@example.com', password: 'wrongpass' });
+  check('admin login wrong password returns 401', adminWrong.status === 401);
+  check('admin login wrong password message', adminWrong.json.error === 'Invalid admin email or password.');
+
+  // Unknown email must be rejected.
+  const adminUnknown = await post('/api/auth/admin/login', { email: 'nobody@example.com', password: 'admin123' });
+  check('admin login unknown email returns 401', adminUnknown.status === 401);
+  check('admin login unknown email message', adminUnknown.json.error === 'Invalid admin email or password.');
+
+  // Missing credentials.
+  const adminEmpty = await post('/api/auth/admin/login', { email: '', password: '' });
+  check('admin login requires email and password', adminEmpty.status === 400);
+
+  // Seeded admin provisioning is idempotent: repeated provisioning on restart
+  // never creates a duplicate admin or changes its identity.
+  const { ensureAdmin } = require('./seed');
+  const seedAdminId1 = ensureAdmin();
+  const seedAdminBefore = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+  const seedAdminId2 = ensureAdmin(); // simulate an app restart re-running the seed
+  const seedAdminAfter = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+  check('seed admin provisioning returns same account on restart', seedAdminId1 === seedAdminId2);
+  check('seed admin provisioning does not grow admin count', seedAdminAfter === seedAdminBefore);
+
+  // Self-service admin creation endpoint is disabled.
+  const setupDisabled = await post('/api/auth/admin/setup', { name: 'X', email: 'x-admin@example.com', password: 'secret123' });
+  check('admin self-service creation endpoint disabled', setupDisabled.status === 404);
 
   const mgrRegister = await post('/api/auth/register', { name: 'X', email: 'x-admin@example.com', password: 'secret123', role: 'admin' });
   check('register cannot create admin', mgrRegister.status === 400);
 
   // --- Admin ---
   const adminUsers = await get('/api/admin/users', adminTok);
-  check('admin lists users', adminUsers.status === 200 && adminUsers.json.users.length === 8);
+  check('admin lists users', adminUsers.status === 200 && adminUsers.json.users.length === 5);
   const buyerOnly = await get('/api/admin/users', buyerTok);
   check('buyer forbidden from admin', buyerOnly.status === 403);
   const reports = await get('/api/admin/reports', adminTok);
@@ -567,7 +577,7 @@ async function main() {
   check('disabled user cannot login', loginDisabled.status === 403);
 
   const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
-  check('all users stored in DB', count === 8);
+  check('all users stored in DB', count === 5);
 
   db.close();
   for (const suffix of ['', '-journal', '-wal', '-shm']) {

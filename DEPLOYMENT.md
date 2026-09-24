@@ -15,7 +15,7 @@ stores uploaded images on disk.
 | Port | `process.env.PORT \|\| 3000` (`server/index.js:14`) | Render injects `PORT` automatically. |
 | Entry file | `server/index.js` (see `package.json` "main" and "start") | Start command is `npm start`. |
 | Seeding | `server/seed.js` runs on boot unless `DISABLE_SEED=1`. It is **idempotent**: it only inserts missing demo users/categories/products and never deletes or overwrites existing rows. | No action needed; set `DISABLE_SEED=1` if you want a clean production database. |
-| Authentication | bcrypt password hashing + opaque random sessions stored in the `sessions` table; tokens sent via `Authorization: Bearer <token>` (over HTTPS/TLS). No secrets stored in source. Accounts are created with email + password directly; admins can also be self-created with a shared `ADMIN_SETUP_CODE`. | Works as-is over Render's HTTPS. |
+| Authentication | bcrypt password hashing + opaque random sessions stored in the `sessions` table; tokens sent via `Authorization: Bearer <token>` (over HTTPS/TLS). No secrets stored in source. Accounts are created with email + password directly; a single admin account (`admin@deepimart.com`) is seeded once with strict bcrypt validation (no demo bypass). | Works as-is over Render's HTTPS. |
 | Static assets | `public/` (CSS, JS, images) served by `express.static`; the app uses hash-based routing (`#/...`) so no SPA fallback rewrite is needed. | Works as-is. |
 
 Because the app is hash-routed and all API calls use relative URLs, **nothing in the codebase is
@@ -78,12 +78,13 @@ values to the repository. An annotated template lives in `.env.example`.
 | `PORT` | No | (auto) | Render injects this; the app defaults to 3000. |
 | `NODE_ENV` | No | (auto `production`) | Render sets it; keeps error responses generic. |
 | `CORS_ORIGIN` | No | `https://deepimart.onrender.com` | Optional; comma-separated. Leave unset for a same-origin SPA. |
-| `ADMIN_SETUP_CODE` | Yes\* | `<long random code>` | Enforced **only in production** (`DEMO_MODE=false`). Validated server-side, never sent to the browser. Without it the endpoint returns `503`. |
-| `DEMO_MODE` | No | `false` | Set to `true` for demo/dev: "Create New Admin" needs no setup code and Admin Login accepts any email/password, redirecting straight to the Admin Dashboard. Defaults to on outside of `NODE_ENV=production`. |
+| `ADMIN_SETUP_CODE` | No | n/a | Removed. Admin credentials are seeded once (`admin@deepimart.com` / `admin123`); login always validates the stored bcrypt hash. | 
+| `DEMO_MODE` | No | n/a | Removed. There is no "any credentials" bypass — wrong admin credentials always return 401. |
 | `DISABLE_SEED` | No | `1` | Set to `1` to skip demo seed data. Safe to omit (seed is idempotent). |
 
-\* Required **only** for the self-service "Create New Admin" flow in production (`DEMO_MODE=false`). The seeded `admin@deepimart.com`
-account keeps working without it.
+The single admin account is provisioned by the idempotent seed on first boot and never
+recreated, reset, or overwritten on restart. The seeded `admin@deepimart.com` account is what
+logs in; there is no self-service "Create New Admin" flow.
 
 Minimum working set on a fresh Render service using a `/var/data` disk:
 
@@ -91,7 +92,6 @@ Minimum working set on a fresh Render service using a `/var/data` disk:
 NODE_VERSION=22
 DB_PATH=/var/data/deepimart.db
 UPLOADS_DIR=/var/data/uploads
-ADMIN_SETUP_CODE=<openssl rand -hex 24 output>
 ```
 
 ## 5. Database requirements
