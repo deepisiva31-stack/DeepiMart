@@ -233,12 +233,12 @@ router.post('/farmer/products', requireAuth, requireRole('farmer'), (req, res) =
   const d = check.data;
   const result = db
     .prepare(
-      `INSERT INTO products (farmer_id, category_id, name, description, photo, price, unit, quantity, harvest_date, freshness, location)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO products (farmer_id, category_id, name, description, photo, price, unit, quantity, harvest_date, freshness, location, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved')`
     )
     .run(req.user.id, d.categoryId, d.name, d.description, d.photo, d.price, d.unit, d.quantity, d.harvestDate, d.freshness, d.location || req.user.location);
   const row = db.prepare(`${productSelect()} WHERE p.id = ?`).get(result.lastInsertRowid);
-  res.status(201).json({ message: 'Product added. It will be visible to buyers once verified.', product: mapProduct(row) });
+  res.status(201).json({ message: 'Product added and is now live in the marketplace.', product: mapProduct(row) });
 });
 
 router.put('/farmer/products/:id', requireAuth, requireRole('farmer'), (req, res) => {

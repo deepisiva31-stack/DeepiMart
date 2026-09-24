@@ -787,9 +787,15 @@ input.invalid {
   padding: 0;
 }
 
+.role-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
 .role-option {
-  display: block;
-  margin-bottom: 10px;
+  flex: 1 1 0;
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -802,23 +808,76 @@ input.invalid {
 .role-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 12px;
+  height: 100%;
+  padding: 16px 14px;
   border: 1.5px solid var(--soil-300);
   border-radius: var(--radius-sm);
   background: var(--white);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.role-card small {
+.role-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--soil-100);
+  color: var(--green-800);
+}
+
+.role-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.role-text strong {
+  font-size: 16px;
+}
+
+.role-text small {
   color: var(--soil-500);
   font-weight: 400;
+}
+
+.role-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: 50%;
+  border: 1.5px solid var(--soil-300);
+  color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.role-option:hover .role-card {
+  border-color: var(--green-500);
 }
 
 .role-option input:checked + .role-card {
   border-color: var(--green-600);
   background: var(--green-100);
+  box-shadow: 0 2px 10px rgba(46, 106, 79, 0.12);
+}
+
+.role-option input:checked + .role-card .role-icon {
+  background: var(--green-600);
+  color: var(--white);
+}
+
+.role-option input:checked + .role-card .role-check {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: var(--white);
 }
 
 .form-message {
@@ -1900,8 +1959,11 @@ input.invalid {
     font-size: 22px;
   }
 
-  .role-card {
+  .role-grid {
     flex-direction: column;
+  }
+
+  .role-card {
     align-items: flex-start;
   }
 

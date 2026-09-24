@@ -177,20 +177,27 @@ async function main() {
 
   const create = await post('/api/farmer/products', { name: 'Test Tomatoes', description: 'Fresh', categoryId: catId, price: 5000, unit: 'kg', quantity: 50, harvestDate: '2026-08-01', freshness: 'Fresh', location: 'Kampala' }, farmerTok);
   check('farmer creates product', create.status === 201);
-  check('new product starts pending', create.json.product.status === 'pending');
+  check('new product is approved automatically', create.json.product.status === 'approved');
   const productId = create.json.product.id;
 
   const notFarmer = await post('/api/farmer/products', { name: 'X', categoryId: catId, price: 1, unit: 'kg', quantity: 1 }, buyerTok);
   check('buyer cannot create product', notFarmer.status === 403);
 
   const listApproved = await get('/api/products');
-  check('pending product not listed publicly', !listApproved.json.products.some((p) => p.id === productId));
+  check('new product listed for buyers right away', listApproved.json.products.some((p) => p.id === productId));
 
-  // --- Admin verify product ---
-  const approve = await patch('/api/admin/products/' + productId, { status: 'approved' }, adminTok);
-  check('admin approves product', approve.status === 200);
+  // --- Admin product moderation (reject / approve) ---
+  const moder = await post('/api/farmer/products', { name: 'Moderated Wheat', description: 'x', categoryId: catId, price: 4000, unit: 'kg', quantity: 20 }, farmerTok);
+  check('farmer creates product for moderation test', moder.status === 201 && moder.json.product.status === 'approved');
+  const moderId = moder.json.product.id;
+  const reject = await patch('/api/admin/products/' + moderId, { status: 'rejected' }, adminTok);
+  check('admin rejects product', reject.status === 200);
+  const listAfterReject = await get('/api/products');
+  check('rejected product not listed publicly', !listAfterReject.json.products.some((p) => p.id === moderId));
+  const approve = await patch('/api/admin/products/' + moderId, { status: 'approved' }, adminTok);
+  check('admin re-approves product', approve.status === 200);
   const listApproved2 = await get('/api/products');
-  check('approved product listed publicly', listApproved2.json.products.some((p) => p.id === productId));
+  check('approved product listed publicly', listApproved2.json.products.some((p) => p.id === moderId));
 
   // --- Product image upload ---
   const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');

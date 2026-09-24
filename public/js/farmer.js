@@ -395,7 +395,7 @@
           DM.toast('Product updated.', 'success');
         } else {
           await DM.api('POST', '/api/farmer/products', payload);
-          DM.toast('Product added. It needs admin verification to go live.', 'success');
+          DM.toast('Product added. It is now live in the marketplace.', 'success');
         }
         window.location.hash = '#/farmer/products';
       } catch (err) {

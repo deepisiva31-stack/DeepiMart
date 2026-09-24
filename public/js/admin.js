@@ -140,7 +140,7 @@
         pageTitle('Admin Dashboard', 'Monitor users, products, orders and marketplace health.'),
         DM.el('div', { class: 'stats-grid' }, [
           statCard('Total Buyers', s.buyers, '', 'buyers'),
-          statCard('Total Sellers', s.sellers, '', 'sellers'),
+          statCard('Total Farmers', s.sellers, '', 'sellers'),
           statCard('Total Products', s.products, '', 'products'),
           statCard('Total Orders', s.orders, '', 'orders'),
           statCard('Delivered Orders', s.delivered, 'good', 'delivered'),
@@ -310,7 +310,7 @@
       table.appendChild(tbody);
 
       var container = DM.el('div', { class: 'page' }, [
-        pageTitle('Verify Products', 'Approve or reject product listings before they go live.'),
+        pageTitle('Verify Products', 'Manage product listings - new farmer products go live automatically.'),
         DM.el('div', { class: 'section' }, [table]),
       ]);
       view.innerHTML = '';
@@ -413,7 +413,7 @@
     if (u.role === 'buyer') rows.push(infoRow('Orders placed', u.order_count));
     var body = DM.el('div', null, [head, DM.el('div', { class: 'info-grid' }, rows)]);
     var footer = modalFooter();
-    var modal = DM.openModal(body, { title: u.role === 'farmer' ? 'Seller details' : u.role === 'buyer' ? 'Buyer details' : 'User details', footer: footer.foot });
+    var modal = DM.openModal(body, { title: u.role === 'farmer' ? 'Farmer details' : u.role === 'buyer' ? 'Buyer details' : 'User details', footer: footer.foot });
     footer.setModal(modal);
   }
 
@@ -475,7 +475,7 @@
         DM.el('div', { class: 'info-grid' }, [
           infoRow('Order date', DM.formatDate(o.createdAt)),
           infoRow('Buyer', buyerText),
-          infoRow('Seller', o.farmer ? o.farmer.name : '-'),
+          infoRow('Farmer', o.farmer ? o.farmer.name : '-'),
           infoRow('Delivery address', o.deliveryAddress),
           infoRow('Payment', paymentText),
           infoRow('Order status', STATUS_LABELS[o.status] || cap(o.status)),

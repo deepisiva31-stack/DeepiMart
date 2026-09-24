@@ -205,14 +205,16 @@ async function main() {
       const p = d.products.find((x) => x.name === 'UI Test Maize');
       return p ? String(p.id) : null;
     });
-    await page.evaluate(async (prodId) => {
-      const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@deepimart.com', password: 'admin123' }) });
-      const ld = await lr.json();
-      if (ld.token && prodId) {
-        await fetch('/api/admin/products/' + prodId, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ld.token }, body: JSON.stringify({ status: 'approved' }) });
-      }
-    }, imgProdId);
   }
+
+  step('new farmer product auto-listed for buyers');
+  await sleep(300);
+  const autoListed = await page.evaluate(async () => {
+    const r = await fetch('/api/products');
+    const d = await r.json();
+    return d.products.some((p) => p.name === 'UI Test Maize');
+  });
+  check('new farmer product appears in buyer marketplace without admin approval', autoListed);
 
   step('farmer orders');
   await goto('#/farmer/orders');
@@ -422,7 +424,7 @@ async function main() {
   await page.waitForSelector('.product-card');
   await click('.product-card a[href^="#/buyer/product/"]');
   await page.waitForFunction(() => window.location.hash.indexOf('#/buyer/product/') === 0, { timeout: 8000 });
-  await page.waitForSelector('.review-form-section', { timeout: 5000 });
+  await page.waitForSelector('#rv-body', { timeout: 5000 });
   check('product detail shows reviews section', true);
 
   step('buyer write review');

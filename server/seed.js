@@ -82,7 +82,7 @@ function seed() {
   ensureProduct(farmer2, cat.grains, 'Organic Rice', 'Long-grain rice from Masaka wetlands.', '', 6500, 'kg', 400, tenDays, 'Freshly milled.', 'Masaka', 'approved');
   ensureProduct(farmer2, cat.tubers, 'Irish Potatoes', 'Clean, graded Irish potatoes.', '', 2500, 'kg', 300, fiveDays, 'Recently harvested.', 'Masaka', 'approved');
   ensureProduct(farmer2, cat.meat, 'Farm Eggs (Tray)', 'Free-range eggs, 30 per tray.', '', 12000, 'tray', 25, yesterday, 'Collected yesterday.', 'Masaka', 'approved');
-  ensureProduct(farmer, cat.fruits, 'Bananas (Matooke)', 'Green cooking bananas, sturdy bunch.', '', 10000, 'bunch', 40, fiveDays, 'Fresh from the farm.', 'Kampala', 'pending');
+  ensureProduct(farmer, cat.fruits, 'Bananas (Matooke)', 'Green cooking bananas, sturdy bunch.', '', 10000, 'bunch', 40, fiveDays, 'Fresh from the farm.', 'Kampala', 'approved');
 
   const orders = db.prepare('SELECT COUNT(*) AS n FROM orders').get().n;
   if (orders === 0) {
